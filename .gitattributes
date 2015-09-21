@@ -1,0 +1,7 @@
+# Golang source code
+*.go     text eol=lf whitespace=blank-at-eol,blank-at-eof,space-before-tab,trailing-space,tabwidth=4
+*.s      text eol=lf whitespace=blank-at-eol,blank-at-eof,space-before-tab,trailing-space,tabwidth=4
+
+*.md text=auto
+Caddyfile text=auto
+README text=auto
