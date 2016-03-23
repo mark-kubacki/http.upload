@@ -7,9 +7,21 @@
 // reacts to new files. For example, with the intention to trigger uploads
 // to other locations (mirrors).
 //
+// For request authentication, this is how you generate a HMAC in shell scripts
+// and encode it using base64:
+//  key="geheim"
+//  timestamp="$(date --utc +%s)"
+//  token="streng"
+//
+//  printf "${timestamp}${token}" \
+//  | openssl dgst -sha256 -hmac "${key}" -binary \
+//  | openssl enc -base64
+//
+// See also: https://en.wikipedia.org/wiki/List_of_HTTP_status_codes
 package upload // import "blitznote.com/src/caddy.upload"
 
 import (
+	"encoding/base64"
 	"fmt"
 	"io"
 	"net/http"
@@ -42,6 +54,7 @@ func Setup(c *setup.Controller) (middleware.Middleware, error) {
 
 func parseCaddyConfig(c *setup.Controller) (UploadHandlerConfiguration, error) {
 	var config UploadHandlerConfiguration
+	config.TimestampTolerance = 1 << 2
 
 	for c.Next() {
 		config.PathScopes = c.RemainingArgs() // most likely only one path; but could be more
@@ -63,6 +76,32 @@ func parseCaddyConfig(c *setup.Controller) (UploadHandlerConfiguration, error) {
 					return config, c.Err("'to' must be a directory or mount point")
 				}
 				config.WriteToPath = writeToPath
+			case "hmac_key_in":
+				if !c.NextArg() {
+					return config, c.Err("'hmac_key_in' must be followed by a base64-encoded string")
+				}
+				k, err := base64.StdEncoding.DecodeString(c.Val())
+				if err != nil {
+					return config, c.Err(err.Error())
+				}
+				config.IncomingSharedHmacSecret = k
+			case "timestamp_tolerance":
+				if !c.NextArg() {
+					return config, c.Err("'timestamp_tolerance' accepts a positive integer, which is missing")
+				}
+				s, err := strconv.ParseUint(c.Val(), 10, 32)
+				if err != nil {
+					return config, c.Err(err.Error())
+				}
+				if s > 60 { // someone configured a ridiculously high exponent
+					return config, c.Err("we're sorry, but by this time Sol has already melted Terra")
+				}
+				if s > 32 {
+					return config, c.Err("must be ≤ 32")
+				}
+				config.TimestampTolerance = 1 << s
+			case "silent_auth_errors":
+				config.SilenceAuthErrors = true
 			}
 		}
 	}
@@ -78,17 +117,27 @@ type UploadHandler struct {
 	Config UploadHandlerConfiguration
 }
 
-// XXX(mark): HMAC support
 // XXX(mark): auto-cipher
 // XXX(mark): lock, and timer-based lock reset
 
 // State of UploadHandler, result of directives found in a 'Caddyfile'.
 type UploadHandlerConfiguration struct {
+	// How big a difference between 'now' and the provided timestamp do we tolerate?
+	// In seconds. Due to possible optimizations this should be an order of 2.
+	// A reasonable default is 1<<2.
+	TimestampTolerance uint64
+
 	// prefixes on which Caddy activates this plugin (read-only)
 	PathScopes []string
 
 	// the upload destination
 	WriteToPath string
+
+	// Already decoded. Request verification is disabled if this is empty.
+	IncomingSharedHmacSecret []byte
+
+	// A skilled attacked will monitor traffic, and timings. This merely obscures the path.
+	SilenceAuthErrors bool
 }
 
 // Gateway to ServeMultipartUpload and WriteOneHttpBlob on uploads, else a passthrough.
@@ -106,15 +155,25 @@ func (h UploadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, e
 		for _, pathPrefix := range h.Config.PathScopes {
 			if middleware.Path(r.URL.Path).Matches(pathPrefix) {
 				scope = pathPrefix
+				break
 			}
 		}
+	default:
+		// Reads are not our responsibility.
+		// Worst case the requestor gets a 404, 405, or 410.
+		return h.Next.ServeHTTP(w, r)
 	}
 	if scope == "" {
 		return h.Next.ServeHTTP(w, r)
 	}
 
-	// XXX(mark): check the HMAC
-	// XXX(mark): passthrough if stealthy, else return 401
+	if resp, err := h.authenticate(r); err != nil {
+		if h.Config.SilenceAuthErrors {
+			return h.Next.ServeHTTP(w, r)
+		}
+		return resp, err
+	}
+
 	switch r.Method {
 	case "POST":
 		ctype := r.Header.Get("Content-Type")
@@ -131,8 +190,7 @@ func (h UploadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, e
 		return retval, err
 	}
 
-	// Reads are not our responsibility.
-	// Worst case the requestor gets a 404, 405, or 410.
+	// impossible to reach, but makes static code analyzers happy
 	return h.Next.ServeHTTP(w, r)
 }
 
