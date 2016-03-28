@@ -1,27 +1,6 @@
-// UploadHandler provides facilities to conduct uploads
-// using the HTTP protocol as transport.
-//
-// If possible, i. e. if the operating- and filesystem implements it,
-// files will not emerge before their first upload is completed.
-// This is of importance to software that monitors a set of paths and
-// reacts to new files. For example, with the intention to trigger uploads
-// to other locations (mirrors).
-//
-// For request authentication, this is how you generate a HMAC in shell scripts
-// and encode it using base64:
-//  key="geheim"
-//  timestamp="$(date --utc +%s)"
-//  token="streng"
-//
-//  printf "${timestamp}${token}" \
-//  | openssl dgst -sha256 -hmac "${key}" -binary \
-//  | openssl enc -base64
-//
-// See also: https://en.wikipedia.org/wiki/List_of_HTTP_status_codes
 package upload // import "blitznote.com/src/caddy.upload"
 
 import (
-	"encoding/base64"
 	"fmt"
 	"io"
 	"net/http"
@@ -30,114 +9,14 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/mholt/caddy/caddy/setup"
 	"github.com/mholt/caddy/middleware"
 
 	"blitznote.com/src/caddy.upload/protofile"
 )
 
-// Configures an UploadHander instance.
-// This is called by Caddy every time the corresponding directive is used.
-func Setup(c *setup.Controller) (middleware.Middleware, error) {
-	config, err := parseCaddyConfig(c)
-	if err != nil {
-		return nil, err
-	}
-
-	return func(next middleware.Handler) middleware.Handler {
-		return &UploadHandler{
-			Next:   next,
-			Config: config,
-		}
-	}, nil
-}
-
-func parseCaddyConfig(c *setup.Controller) (UploadHandlerConfiguration, error) {
-	var config UploadHandlerConfiguration
-	config.TimestampTolerance = 1 << 2
-
-	for c.Next() {
-		config.PathScopes = c.RemainingArgs() // most likely only one path; but could be more
-
-		for c.NextBlock() {
-			key := c.Val()
-			switch key {
-			case "to":
-				if !c.NextArg() {
-					return config, c.ArgErr()
-				}
-				// must be a directory
-				writeToPath := c.Val()
-				finfo, err := os.Stat(writeToPath)
-				if err != nil {
-					return config, c.Err(err.Error())
-				}
-				if !finfo.IsDir() {
-					return config, c.Err("'to' must be a directory or mount point")
-				}
-				config.WriteToPath = writeToPath
-			case "hmac_key_in":
-				if !c.NextArg() {
-					return config, c.Err("'hmac_key_in' must be followed by a base64-encoded string")
-				}
-				k, err := base64.StdEncoding.DecodeString(c.Val())
-				if err != nil {
-					return config, c.Err(err.Error())
-				}
-				config.IncomingSharedHmacSecret = k
-			case "timestamp_tolerance":
-				if !c.NextArg() {
-					return config, c.Err("'timestamp_tolerance' accepts a positive integer, which is missing")
-				}
-				s, err := strconv.ParseUint(c.Val(), 10, 32)
-				if err != nil {
-					return config, c.Err(err.Error())
-				}
-				if s > 60 { // someone configured a ridiculously high exponent
-					return config, c.Err("we're sorry, but by this time Sol has already melted Terra")
-				}
-				if s > 32 {
-					return config, c.Err("must be ≤ 32")
-				}
-				config.TimestampTolerance = 1 << s
-			case "silent_auth_errors":
-				config.SilenceAuthErrors = true
-			}
-		}
-	}
-
-	if config.PathScopes == nil || len(config.PathScopes) == 0 {
-		return config, c.ArgErr()
-	}
-	return config, nil
-}
-
 type UploadHandler struct {
 	Next   middleware.Handler
 	Config UploadHandlerConfiguration
-}
-
-// XXX(mark): auto-cipher
-// XXX(mark): lock, and timer-based lock reset
-
-// State of UploadHandler, result of directives found in a 'Caddyfile'.
-type UploadHandlerConfiguration struct {
-	// How big a difference between 'now' and the provided timestamp do we tolerate?
-	// In seconds. Due to possible optimizations this should be an order of 2.
-	// A reasonable default is 1<<2.
-	TimestampTolerance uint64
-
-	// prefixes on which Caddy activates this plugin (read-only)
-	PathScopes []string
-
-	// the upload destination
-	WriteToPath string
-
-	// Already decoded. Request verification is disabled if this is empty.
-	IncomingSharedHmacSecret []byte
-
-	// A skilled attacked will monitor traffic, and timings. This merely obscures the path.
-	SilenceAuthErrors bool
 }
 
 // Gateway to ServeMultipartUpload and WriteOneHttpBlob on uploads, else a passthrough.
@@ -170,6 +49,10 @@ func (h UploadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, e
 	if resp, err := h.authenticate(r); err != nil {
 		if h.Config.SilenceAuthErrors {
 			return h.Next.ServeHTTP(w, r)
+		}
+		if resp == 401 {
+			// send this header to prevent the user being asked for a username/password pair
+			w.Header().Set("WWW-Authenticate", "Signature")
 		}
 		return resp, err
 	}

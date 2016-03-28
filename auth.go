@@ -1,22 +1,10 @@
 package upload // import "blitznote.com/src/caddy.upload"
 
 import (
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/base64"
-	"fmt"
+	"errors"
 	"net/http"
-	"strconv"
 	"time"
 )
-
-func checkHMAC(HmacSharedSecret, Token, Signature []byte, Timestamp uint64) bool {
-	mac := hmac.New(sha256.New, []byte(HmacSharedSecret))
-	mac.Write([]byte(strconv.FormatUint(Timestamp, 10)))
-	mac.Write([]byte(Token))
-	expectedMAC := mac.Sum(nil)
-	return hmac.Equal(Signature, expectedMAC)
-}
 
 // Results in a syscall issued by 'runtime'.
 func getTimestampUsingTime() uint64 {
@@ -29,31 +17,53 @@ func getTimestampUsingTime() uint64 {
 // Will be overwritten by another in-house package.
 var getTimestamp func() uint64 = getTimestampUsingTime
 
-func abs64(n uint64) uint64 {
-	sign := n >> (64 - 1)
-	return (n ^ sign) - sign
-}
-
+// Validates and verifies the authorization header.
 func (h UploadHandler) authenticate(r *http.Request) (httpResponseCode int, err error) {
 	httpResponseCode = 200 // 200: ok/pass
 
-	if len(h.Config.IncomingSharedHmacSecret) > 0 {
-		p, v, e := r.Header.Get("Timestamp"), r.Header.Get("Token"), r.Header.Get("Signature")
-		timestamp, err := strconv.ParseUint(p, 10, 64)
-		sig, err2 := base64.StdEncoding.DecodeString(e)
-		// Timing is unimportant here: the attacker can only learn our parsing abilities.
-		if p == "" || v == "" || e == "" || err != nil || err2 != nil {
-			return 400, nil // 400: catchall for bad requests
-		}
+	h.Config.IncomingHmacSecretsLock.RLock()
+	if len(h.Config.IncomingHmacSecrets) == 0 {
+		h.Config.IncomingHmacSecretsLock.RUnlock()
+		return
+	}
+	h.Config.IncomingHmacSecretsLock.RUnlock()
 
-		now := getTimestamp()
-		timestampOk := abs64(now-timestamp) <= h.Config.TimestampTolerance
+	var a AuthorizationHeader
+	a.Algorithm = "hmac-sha256"
+	a.HeadersToSign = []string{"timestamp", "token"}
 
-		// In this scheme (timestamp || v) constitutes the token.
-		if !timestampOk || !checkHMAC(h.Config.IncomingSharedHmacSecret, []byte(v), sig, timestamp) {
-			return 403, fmt.Errorf("Method Not Authorized") // 403: forbidden
-		}
+	err = a.Parse(r.Header.Get("Authorization"))
+	switch err {
+	case ErrAuthorizationNotSupported: // or the header is empty/not set
+		return 401, err
+	case nil:
+		break
+	default:
+		return 400, err
 	}
 
+	if len(a.Signature) == 0 || len(a.HeadersToSign) < 2 ||
+		a.Algorithm != "hmac-sha256" {
+		return 400, errors.New("Authorization: unsupported 'algorithm'")
+	}
+	if !(a.HeadersToSign[0] == "date" || a.HeadersToSign[0] == "timestamp") ||
+		a.HeadersToSign[1] != "token" {
+		return 400, errors.New("Authorization: mismatch in prefix of 'headers'")
+	}
+
+	if !a.CheckFormal(r.Header, getTimestamp(), h.Config.TimestampTolerance) {
+		return 400, errors.New("Authorization: not all expected headers had been set correctly")
+	}
+
+	h.Config.IncomingHmacSecretsLock.RLock()
+	hmacSharedSecret, secretNotFound := h.Config.IncomingHmacSecrets[a.KeyId]
+	h.Config.IncomingHmacSecretsLock.RUnlock()
+
+	// do this anyway to not reveal if the keyId exists
+	isSatisfied := a.SatisfiedBy(r.Header, hmacSharedSecret)
+
+	if !secretNotFound || !isSatisfied {
+		return 403, errors.New("Method Not Authorized") // 403: forbidden
+	}
 	return
 }
