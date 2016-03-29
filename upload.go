@@ -27,7 +27,7 @@ type UploadHandler struct {
 // PUT
 // when you use
 //  curl -T <filename> <url>
-func (h UploadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error) {
+func (h *UploadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error) {
 	var scope string // aka 'target directory'
 	switch r.Method {
 	case "POST", "PUT":
@@ -81,7 +81,7 @@ func (h UploadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, e
 }
 
 // Unwraps one or more supplied files, and feeds them to WriteOneHttpBlob.
-func (h UploadHandler) ServeMultipartUpload(w http.ResponseWriter, r *http.Request, scope string) (int, error) {
+func (h *UploadHandler) ServeMultipartUpload(w http.ResponseWriter, r *http.Request, scope string) (int, error) {
 	mr, err := r.MultipartReader()
 	if err != nil {
 		return 415, fmt.Errorf("Malformed Content")
@@ -111,7 +111,7 @@ func (h UploadHandler) ServeMultipartUpload(w http.ResponseWriter, r *http.Reque
 }
 
 // Translates the 'scope' into a proper directory, and extracts the filename from the resulting string.
-func (h UploadHandler) splitInDirectoryAndFilename(scope, providedName string) (string, string, *os.PathError) {
+func (h *UploadHandler) splitInDirectoryAndFilename(scope, providedName string) (string, string, *os.PathError) {
 	s := strings.TrimPrefix(providedName, scope)               // "/upload/mine/my.blob" → "/mine/my.blob"
 	s = h.Config.WriteToPath + "/" + strings.TrimLeft(s, "./") // → "/var/mine/my.blob"
 
@@ -126,7 +126,7 @@ func (h UploadHandler) splitInDirectoryAndFilename(scope, providedName string) (
 }
 
 // Adapts WriteFileFromReader to HTTP conventions by translating input formats and output values.
-func (h UploadHandler) WriteOneHttpBlob(scope, fileName, anticipatedSize string, r io.Reader) (int64, int, error) {
+func (h *UploadHandler) WriteOneHttpBlob(scope, fileName, anticipatedSize string, r io.Reader) (int64, int, error) {
 	expectBytes, _ := strconv.ParseInt(anticipatedSize, 10, 64)
 	if anticipatedSize != "" && expectBytes <= 0 { // we cannot work with that
 		return 0, 411, nil // 411: length required

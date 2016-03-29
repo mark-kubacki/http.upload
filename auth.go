@@ -18,7 +18,7 @@ func getTimestampUsingTime() uint64 {
 var getTimestamp func() uint64 = getTimestampUsingTime
 
 // Validates and verifies the authorization header.
-func (h UploadHandler) authenticate(r *http.Request) (httpResponseCode int, err error) {
+func (h *UploadHandler) authenticate(r *http.Request) (httpResponseCode int, err error) {
 	httpResponseCode = 200 // 200: ok/pass
 
 	h.Config.IncomingHmacSecretsLock.RLock()

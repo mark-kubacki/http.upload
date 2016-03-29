@@ -23,13 +23,13 @@ func Setup(c *setup.Controller) (middleware.Middleware, error) {
 	return func(next middleware.Handler) middleware.Handler {
 		return &UploadHandler{
 			Next:   next,
-			Config: config,
+			Config: *config,
 		}
 	}, nil
 }
 
-func parseCaddyConfig(c *setup.Controller) (UploadHandlerConfiguration, error) {
-	var config UploadHandlerConfiguration
+func parseCaddyConfig(c *setup.Controller) (*UploadHandlerConfiguration, error) {
+	config := new(UploadHandlerConfiguration)
 	config.TimestampTolerance = 1 << 2
 	config.IncomingHmacSecrets = make(map[string][]byte)
 
@@ -123,7 +123,7 @@ type UploadHandlerConfiguration struct {
 //  hmac-key-1=yql3kIDweM8KYm+9pHzX0PKNskYAU46Jb5D6nLftTvo=
 //
 // The first tuple that cannot be decoded is returned as error string.
-func (c UploadHandlerConfiguration) AddHmacSecrets(tuples []string) (err error) {
+func (c *UploadHandlerConfiguration) AddHmacSecrets(tuples []string) (err error) {
 	c.IncomingHmacSecretsLock.Lock()
 	defer c.IncomingHmacSecretsLock.Unlock()
 

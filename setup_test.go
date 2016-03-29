@@ -133,7 +133,8 @@ func TestSetupParse(t *testing.T) {
 	}
 
 	Convey("Setup of the controller", t, func() {
-		for _, test := range tests {
+		for idx, _ := range tests {
+			test := tests[idx]
 			c := setup.NewTestController(test.config)
 			gotConf, err := parseCaddyConfig(c)
 
@@ -144,7 +145,7 @@ func TestSetupParse(t *testing.T) {
 			}
 
 			// test.postInit(&test.expectedConf)
-			So(gotConf, ShouldResemble, test.expectedConf)
+			So(*gotConf, ShouldResemble, test.expectedConf)
 		}
 	})
 }
