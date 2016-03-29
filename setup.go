@@ -83,6 +83,9 @@ func parseCaddyConfig(c *setup.Controller) (UploadHandlerConfiguration, error) {
 		}
 	}
 
+	if config.WriteToPath == "" {
+		return config, c.Errf("The destination path 'to' is missing")
+	}
 	if config.PathScopes == nil || len(config.PathScopes) == 0 {
 		return config, c.ArgErr()
 	}
