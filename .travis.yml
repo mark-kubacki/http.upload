@@ -1,0 +1,27 @@
+language: go
+
+sudo: false
+
+go:
+  - 1.6
+  - tip
+
+env:
+  - CGO_ENABLED=0
+
+addons:
+  ssh_known_hosts:
+  - hub.blitznote.com
+
+install:
+  - go get -t ./...
+  - go get github.com/mattn/goveralls
+  - go get golang.org/x/tools/cmd/cover
+  - go get golang.org/x/tools/cmd/vet
+  - go get github.com/gordonklaus/ineffassign
+
+script:
+  - diff <(echo -n) <(gofmt -s -d .)
+  - ineffassign .
+  - go vet ./...
+  - goveralls -service=travis-ci
