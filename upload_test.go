@@ -57,6 +57,12 @@ func compareContents(filename string, contents []byte) {
 
 	buffer := make([]byte, (len(contents)/4096+1)*4096)
 	n, err := fd.Read(buffer)
+	if err != nil {
+		SkipSo(n, ShouldEqual, len(contents))
+		SkipSo(buffer[0:len(contents)], ShouldResemble, contents)
+		So(err, ShouldBeNil)
+		return
+	}
 	So(n, ShouldEqual, len(contents))
 	So(buffer[0:len(contents)], ShouldResemble, contents)
 }

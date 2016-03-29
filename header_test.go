@@ -15,13 +15,13 @@ func TestAuthHeaderSerialization(t *testing.T) {
 		deserialized AuthorizationHeader
 	}{
 		{`Signature keyId="(key=id)",algorithm="hmac-sha256",headers="timestamp token",signature="TWFyaw=="`,
-			AuthorizationHeader{KeyId: "(key=id)", Algorithm: "hmac-sha256",
+			AuthorizationHeader{KeyID: "(key=id)", Algorithm: "hmac-sha256",
 				HeadersToSign: []string{"timestamp", "token"},
 				Signature:     []byte("Mark")},
 		},
 		{`Signature keyId="(key=id)", algorithm="hmac-sha256",  extensions="",
 			headers="timestamp token",signature="TWFyaw=="`,
-			AuthorizationHeader{KeyId: "(key=id)", Algorithm: "hmac-sha256",
+			AuthorizationHeader{KeyID: "(key=id)", Algorithm: "hmac-sha256",
 				HeadersToSign: []string{"timestamp", "token"},
 				Signature:     []byte("Mark")},
 		},
@@ -32,7 +32,7 @@ func TestAuthHeaderSerialization(t *testing.T) {
 			for _, row := range valid {
 				var fresh AuthorizationHeader
 				err := fresh.Parse(row.serialized)
-				So(fresh.KeyId[0], ShouldNotEqual, '"')
+				So(fresh.KeyID[0], ShouldNotEqual, '"')
 				So(err, ShouldBeNil)
 				So(fresh, ShouldResemble, row.deserialized)
 			}

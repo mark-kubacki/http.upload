@@ -1,8 +1,8 @@
-// UploadHandler provides facilities to conduct uploads
-// using the HTTP protocol as transport.
+// Package upload contains a HTTP handler for Caddy,
+// which provides facilities for uploading files.
 //
-// If possible, i. e. if the operating- and filesystem implements it,
-// files will not emerge before their first upload is completed.
+// If possible, i. e. if operating- and filesystem implement it,
+// files will not emerge into observable namespace before their first upload is completed.
 // This is of importance to software that monitors a set of paths and
 // reacts to new files. For example, with the intention to trigger uploads
 // to other locations (mirrors).
@@ -17,7 +17,7 @@
 // github.com/joyent/gosign is an implementation in Golang,
 // github.com/joyent/node-http-signature for Node.js.
 //
-// This is how you generate said signature using a Linux shell:
+// This is how you generate said signature on the Linux shell:
 //  key="geheim"
 //  timestamp="$(date --utc +%s)"
 //  token="streng"

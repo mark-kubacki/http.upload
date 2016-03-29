@@ -14,12 +14,17 @@ import (
 	"blitznote.com/src/caddy.upload/protofile"
 )
 
-type UploadHandler struct {
+// Handler represents a configured instance of this plugin.
+//
+// If you want to use it outside of Caddy, then implement 'Next' as
+// something with method ServeHTTP and at least the same member variables
+// you can find here.
+type Handler struct {
 	Next   middleware.Handler
-	Config UploadHandlerConfiguration
+	Config HandlerConfiguration
 }
 
-// Gateway to ServeMultipartUpload and WriteOneHttpBlob on uploads, else a passthrough.
+// Gateway to ServeMultipartUpload and WriteOneHTTPBlob on uploads, else a passthrough.
 //
 // POST
 // is used with
@@ -27,7 +32,7 @@ type UploadHandler struct {
 // PUT
 // when you use
 //  curl -T <filename> <url>
-func (h *UploadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error) {
+func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error) {
 	var scope string // aka 'target directory'
 	switch r.Method {
 	case "POST", "PUT":
@@ -72,7 +77,7 @@ func (h *UploadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, 
 			return 400, nil // no filename given
 		}
 		fileName := r.URL.Path[1:]
-		_, retval, err := h.WriteOneHttpBlob(scope, fileName, r.Header.Get("Content-Length"), r.Body)
+		_, retval, err := h.WriteOneHTTPBlob(scope, fileName, r.Header.Get("Content-Length"), r.Body)
 		return retval, err
 	}
 
@@ -80,8 +85,8 @@ func (h *UploadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, 
 	return h.Next.ServeHTTP(w, r)
 }
 
-// Unwraps one or more supplied files, and feeds them to WriteOneHttpBlob.
-func (h *UploadHandler) ServeMultipartUpload(w http.ResponseWriter, r *http.Request, scope string) (int, error) {
+// Unwraps one or more supplied files, and feeds them to WriteOneHTTPBlob.
+func (h *Handler) ServeMultipartUpload(w http.ResponseWriter, r *http.Request, scope string) (int, error) {
 	mr, err := r.MultipartReader()
 	if err != nil {
 		return 415, fmt.Errorf("Malformed Content")
@@ -101,7 +106,7 @@ func (h *UploadHandler) ServeMultipartUpload(w http.ResponseWriter, r *http.Requ
 			continue
 		}
 
-		_, retval, err := h.WriteOneHttpBlob(scope, fileName, part.Header.Get("Content-Length"), part)
+		_, retval, err := h.WriteOneHTTPBlob(scope, fileName, part.Header.Get("Content-Length"), part)
 		if err != nil {
 			return retval, err
 		}
@@ -111,7 +116,7 @@ func (h *UploadHandler) ServeMultipartUpload(w http.ResponseWriter, r *http.Requ
 }
 
 // Translates the 'scope' into a proper directory, and extracts the filename from the resulting string.
-func (h *UploadHandler) splitInDirectoryAndFilename(scope, providedName string) (string, string, *os.PathError) {
+func (h *Handler) splitInDirectoryAndFilename(scope, providedName string) (string, string, *os.PathError) {
 	s := strings.TrimPrefix(providedName, scope)               // "/upload/mine/my.blob" → "/mine/my.blob"
 	s = h.Config.WriteToPath + "/" + strings.TrimLeft(s, "./") // → "/var/mine/my.blob"
 
@@ -126,7 +131,7 @@ func (h *UploadHandler) splitInDirectoryAndFilename(scope, providedName string) 
 }
 
 // Adapts WriteFileFromReader to HTTP conventions by translating input formats and output values.
-func (h *UploadHandler) WriteOneHttpBlob(scope, fileName, anticipatedSize string, r io.Reader) (int64, int, error) {
+func (h *Handler) WriteOneHTTPBlob(scope, fileName, anticipatedSize string, r io.Reader) (int64, int, error) {
 	expectBytes, _ := strconv.ParseInt(anticipatedSize, 10, 64)
 	if anticipatedSize != "" && expectBytes <= 0 { // we cannot work with that
 		return 0, 411, nil // 411: length required

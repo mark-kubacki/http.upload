@@ -15,10 +15,10 @@ func getTimestampUsingTime() uint64 {
 // Seconds since 1970-01-01 00:00:00Z.
 //
 // Will be overwritten by another in-house package.
-var getTimestamp func() uint64 = getTimestampUsingTime
+var getTimestamp = getTimestampUsingTime
 
 // Validates and verifies the authorization header.
-func (h *UploadHandler) authenticate(r *http.Request) (httpResponseCode int, err error) {
+func (h *Handler) authenticate(r *http.Request) (httpResponseCode int, err error) {
 	httpResponseCode = 200 // 200: ok/pass
 
 	h.Config.IncomingHmacSecretsLock.RLock()
@@ -56,7 +56,7 @@ func (h *UploadHandler) authenticate(r *http.Request) (httpResponseCode int, err
 	}
 
 	h.Config.IncomingHmacSecretsLock.RLock()
-	hmacSharedSecret, secretNotFound := h.Config.IncomingHmacSecrets[a.KeyId]
+	hmacSharedSecret, secretNotFound := h.Config.IncomingHmacSecrets[a.KeyID]
 	h.Config.IncomingHmacSecretsLock.RUnlock()
 
 	// do this anyway to not reveal if the keyId exists

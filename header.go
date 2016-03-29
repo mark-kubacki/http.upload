@@ -24,16 +24,21 @@ var (
 	ErrAuthorizationNotSupported = errors.New(ErrStrAuthorizationChallengeNotSupported)
 )
 
+// Represents an 'Authorization' HTTP header which is used in
+// authentication scheme "Signature".
 type AuthorizationHeader struct {
-	KeyId         string
+	KeyID         string
 	Algorithm     string // only hmac-sha256 is currently recognized
 	HeadersToSign []string
 	Extensions    []string // not used here
 	Signature     []byte
 }
 
-func (h *AuthorizationHeader) Parse(str string) (err error) {
-	*h, err = parseAuthorizationHeader(str, *h)
+// Updates fields of the AuthorizationHeader from the string representation of said header.
+//
+// Use this to deserialize the result of http.Header.Get(…).
+func (a *AuthorizationHeader) Parse(str string) (err error) {
+	*a, err = parseAuthorizationHeader(str, *a)
 	return
 }
 
@@ -70,7 +75,7 @@ func parseAuthorizationHeader(src string, a AuthorizationHeader) (AuthorizationH
 
 		switch ident {
 		case "keyid":
-			a.KeyId = v
+			a.KeyID = v
 		case "algorithm":
 			a.Algorithm = v
 		case "extensions":
@@ -97,7 +102,7 @@ func parseAuthorizationHeader(src string, a AuthorizationHeader) (AuthorizationH
 
 // Returns true if all listed headers are present and timestamp(s) are within the given tolerance (if given).
 func (a *AuthorizationHeader) CheckFormal(headers http.Header, timestampNow, timeTolerance uint64) bool {
-	for idx, _ := range a.HeadersToSign {
+	for idx := range a.HeadersToSign {
 		v := headers.Get(a.HeadersToSign[idx])
 		if v == "" {
 			return false
@@ -126,7 +131,7 @@ func (a *AuthorizationHeader) CheckFormal(headers http.Header, timestampNow, tim
 // Checks if the headers match the signature.
 func (a *AuthorizationHeader) SatisfiedBy(headers http.Header, secret []byte) bool {
 	mac := hmac.New(sha256.New, secret)
-	for idx, _ := range a.HeadersToSign {
+	for idx := range a.HeadersToSign {
 		mac.Write([]byte(headers.Get(a.HeadersToSign[idx])))
 	}
 	expectedMAC := mac.Sum(nil)

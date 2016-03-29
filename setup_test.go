@@ -12,12 +12,12 @@ func TestSetupParse(t *testing.T) {
 	tests := []struct {
 		config       string
 		expectedErr  error
-		expectedConf UploadHandlerConfiguration
+		expectedConf HandlerConfiguration
 	}{
 		{
 			`upload / { to "/var/tmp" }`,
 			nil,
-			UploadHandlerConfiguration{
+			HandlerConfiguration{
 				TimestampTolerance:  1 << 2,
 				IncomingHmacSecrets: make(map[string][]byte),
 				PathScopes:          []string{"/"},
@@ -27,7 +27,7 @@ func TestSetupParse(t *testing.T) {
 		{
 			`upload /`,
 			errors.New("Testfile:1 - Parse error: The destination path 'to' is missing"),
-			UploadHandlerConfiguration{
+			HandlerConfiguration{
 				TimestampTolerance:  1 << 2,
 				IncomingHmacSecrets: make(map[string][]byte),
 				PathScopes:          []string{"/"},
@@ -39,7 +39,7 @@ func TestSetupParse(t *testing.T) {
 				silent_auth_errors
 			}`,
 			nil,
-			UploadHandlerConfiguration{
+			HandlerConfiguration{
 				TimestampTolerance:  1 << 2,
 				IncomingHmacSecrets: make(map[string][]byte),
 				PathScopes:          []string{"/"},
@@ -53,7 +53,7 @@ func TestSetupParse(t *testing.T) {
 				timestamp_tolerance 8
 			}`,
 			nil,
-			UploadHandlerConfiguration{
+			HandlerConfiguration{
 				TimestampTolerance:  1 << 8,
 				IncomingHmacSecrets: make(map[string][]byte),
 				PathScopes:          []string{"/"},
@@ -66,7 +66,7 @@ func TestSetupParse(t *testing.T) {
 				timestamp_tolerance 33
 			}`,
 			errors.New("Testfile:3 - Parse error: must be ≤ 32"),
-			UploadHandlerConfiguration{
+			HandlerConfiguration{
 				TimestampTolerance:  1 << 2,
 				IncomingHmacSecrets: make(map[string][]byte),
 				PathScopes:          []string{"/"},
@@ -79,7 +79,7 @@ func TestSetupParse(t *testing.T) {
 				timestamp_tolerance 64
 			}`,
 			errors.New("Testfile:3 - Parse error: we're sorry, but by this time Sol has already melted Terra"),
-			UploadHandlerConfiguration{
+			HandlerConfiguration{
 				TimestampTolerance:  1 << 2,
 				IncomingHmacSecrets: make(map[string][]byte),
 				PathScopes:          []string{"/"},
@@ -92,7 +92,7 @@ func TestSetupParse(t *testing.T) {
 				hmac_keys_in hmac-key-1=TWFyaw==
 			}`,
 			nil,
-			UploadHandlerConfiguration{
+			HandlerConfiguration{
 				TimestampTolerance: 1 << 2,
 				PathScopes:         []string{"/"},
 				WriteToPath:        "/var/tmp",
@@ -107,7 +107,7 @@ func TestSetupParse(t *testing.T) {
 				hmac_keys_in hmac-key-1
 			}`,
 			errors.New("Testfile:3 - Parse error: hmac-key-1"),
-			UploadHandlerConfiguration{
+			HandlerConfiguration{
 				TimestampTolerance:  1 << 2,
 				PathScopes:          []string{"/"},
 				WriteToPath:         "/var/tmp",
@@ -120,7 +120,7 @@ func TestSetupParse(t *testing.T) {
 				hmac_keys_in hmac-key-1=TWFyaw== zween=dXBsb2Fk
 			}`,
 			nil,
-			UploadHandlerConfiguration{
+			HandlerConfiguration{
 				TimestampTolerance: 1 << 2,
 				PathScopes:         []string{"/"},
 				WriteToPath:        "/var/tmp",
@@ -133,7 +133,7 @@ func TestSetupParse(t *testing.T) {
 	}
 
 	Convey("Setup of the controller", t, func() {
-		for idx, _ := range tests {
+		for idx := range tests {
 			test := tests[idx]
 			c := setup.NewTestController(test.config)
 			gotConf, err := parseCaddyConfig(c)

@@ -21,15 +21,15 @@ func Setup(c *setup.Controller) (middleware.Middleware, error) {
 	}
 
 	return func(next middleware.Handler) middleware.Handler {
-		return &UploadHandler{
+		return &Handler{
 			Next:   next,
 			Config: *config,
 		}
 	}, nil
 }
 
-func parseCaddyConfig(c *setup.Controller) (*UploadHandlerConfiguration, error) {
-	config := new(UploadHandlerConfiguration)
+func parseCaddyConfig(c *setup.Controller) (*HandlerConfiguration, error) {
+	config := new(HandlerConfiguration)
 	config.TimestampTolerance = 1 << 2
 	config.IncomingHmacSecrets = make(map[string][]byte)
 
@@ -92,8 +92,8 @@ func parseCaddyConfig(c *setup.Controller) (*UploadHandlerConfiguration, error) 
 	return config, nil
 }
 
-// State of UploadHandler, result of directives found in a 'Caddyfile'.
-type UploadHandlerConfiguration struct {
+// State of Handler, result of directives found in a 'Caddyfile'.
+type HandlerConfiguration struct {
 	// How big a difference between 'now' and the provided timestamp do we tolerate?
 	// In seconds. Due to possible optimizations this should be an order of 2.
 	// A reasonable default is 1<<2.
@@ -123,11 +123,11 @@ type UploadHandlerConfiguration struct {
 //  hmac-key-1=yql3kIDweM8KYm+9pHzX0PKNskYAU46Jb5D6nLftTvo=
 //
 // The first tuple that cannot be decoded is returned as error string.
-func (c *UploadHandlerConfiguration) AddHmacSecrets(tuples []string) (err error) {
+func (c *HandlerConfiguration) AddHmacSecrets(tuples []string) (err error) {
 	c.IncomingHmacSecretsLock.Lock()
 	defer c.IncomingHmacSecretsLock.Unlock()
 
-	for idx, _ := range tuples {
+	for idx := range tuples {
 		p := strings.SplitN(tuples[idx], "=", 2)
 		if len(p) != 2 {
 			return errors.New(tuples[idx])
