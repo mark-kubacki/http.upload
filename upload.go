@@ -68,7 +68,10 @@ func (h UploadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, e
 		}
 		fallthrough
 	case "PUT":
-		fileName := r.RequestURI[1:]
+		if len(r.URL.Path) < 2 {
+			return 400, nil // no filename given
+		}
+		fileName := r.URL.Path[1:]
 		_, retval, err := h.WriteOneHttpBlob(scope, fileName, r.Header.Get("Content-Length"), r.Body)
 		return retval, err
 	}
@@ -133,7 +136,7 @@ func (h UploadHandler) WriteOneHttpBlob(scope, fileName, anticipatedSize string,
 
 	path, fname, err1 := h.splitInDirectoryAndFilename(scope, fileName)
 	if err1 != nil {
-		return 0, 422, err1 // 422: unprocessable entity
+		return 0, 422, os.ErrPermission // 422: unprocessable entity
 	}
 
 	bytesWritten, err := WriteFileFromReader(path, fname, r, expectBytes)

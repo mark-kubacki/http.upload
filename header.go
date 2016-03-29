@@ -33,15 +33,12 @@ type AuthorizationHeader struct {
 }
 
 func (h *AuthorizationHeader) Parse(str string) (err error) {
-	*h, err = parseAuthorizationHeader(str)
+	*h, err = parseAuthorizationHeader(str, *h)
 	return
 }
 
-func parseAuthorizationHeader(src string) (AuthorizationHeader, error) {
-	var (
-		a AuthorizationHeader
-		s scanner.Scanner
-	)
+func parseAuthorizationHeader(src string, a AuthorizationHeader) (AuthorizationHeader, error) {
+	var s scanner.Scanner
 
 	s.Init(strings.NewReader(src))
 	tok := s.Scan()

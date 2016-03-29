@@ -76,6 +76,19 @@ func TestSetupParse(t *testing.T) {
 		{
 			`upload / {
 				to "/var/tmp"
+				timestamp_tolerance 64
+			}`,
+			errors.New("Testfile:3 - Parse error: we're sorry, but by this time Sol has already melted Terra"),
+			UploadHandlerConfiguration{
+				TimestampTolerance:  1 << 2,
+				IncomingHmacSecrets: make(map[string][]byte),
+				PathScopes:          []string{"/"},
+				WriteToPath:         "/var/tmp",
+			},
+		},
+		{
+			`upload / {
+				to "/var/tmp"
 				hmac_keys_in hmac-key-1=TWFyaw==
 			}`,
 			nil,
@@ -86,6 +99,19 @@ func TestSetupParse(t *testing.T) {
 				IncomingHmacSecrets: map[string][]byte{
 					"hmac-key-1": []byte("Mark"),
 				},
+			},
+		},
+		{
+			`upload / {
+				to "/var/tmp"
+				hmac_keys_in hmac-key-1
+			}`,
+			errors.New("Testfile:3 - Parse error: hmac-key-1"),
+			UploadHandlerConfiguration{
+				TimestampTolerance:  1 << 2,
+				PathScopes:          []string{"/"},
+				WriteToPath:         "/var/tmp",
+				IncomingHmacSecrets: map[string][]byte{},
 			},
 		},
 		{
