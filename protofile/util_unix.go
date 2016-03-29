@@ -9,15 +9,6 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-const (
-	// As of Go 1.5 these flags have not been included into Go:
-
-	//uapi:uapi/asm*/fcntl.h
-	os_O_TMPFILE = (unix.O_DIRECTORY | 020000000)
-	//uapi:uapi/linux/fcntl.h
-	unix_AT_SYMLINK_FOLLOW = 0x400
-)
-
 // use is a no-op, but the compiler cannot see that it is.
 // Calling use(p) ensures that p is kept live until that point.
 //go:noescape

@@ -20,7 +20,7 @@ func intentNewUnix(path, filename string) (*ProtoFileBehaver, error) {
 	if err != nil {
 		return nil, err
 	}
-	t, err := os.OpenFile(path, os.O_WRONLY|os_O_TMPFILE, 0600)
+	t, err := os.OpenFile(path, os.O_WRONLY|unix.O_TMPFILE, 0600)
 	// did it fail because…
 	if err != nil {
 		switch err {
@@ -56,12 +56,12 @@ func (p unixProtoFile) Persist() error {
 	oldpath := "/proc/self/fd/" + uitoa(uint(fd)) // always ≥0 (often ≥4)
 	// As of Go 1.5 it is not possible to call Linkat with a FD only.
 	// The first parameter is not AT_FDCWD: ignored with {'oldpath',AT_SYMLINK_FOLLOW}, else needed
-	err = linkat(fd, oldpath, unix.AT_FDCWD, p.finalName, unix_AT_SYMLINK_FOLLOW)
+	err = linkat(fd, oldpath, unix.AT_FDCWD, p.finalName, unix.AT_SYMLINK_FOLLOW)
 	if os.IsExist(err) {
 		finfo, err2 := os.Stat(p.finalName)
 		if err2 == nil && !finfo.IsDir() {
 			os.Remove(p.finalName)
-			err = linkat(fd, oldpath, unix.AT_FDCWD, p.finalName, unix_AT_SYMLINK_FOLLOW) // try again
+			err = linkat(fd, oldpath, unix.AT_FDCWD, p.finalName, unix.AT_SYMLINK_FOLLOW) // try again
 		}
 	}
 	// 'linkat' catches many of the errors 'os.Create' would throw.
