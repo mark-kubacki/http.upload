@@ -1,7 +1,7 @@
 package upload // import "blitznote.com/src/caddy.upload"
 
 import (
-	"fmt"
+	"errors"
 	"io"
 	"net/http"
 	"os"
@@ -12,6 +12,10 @@ import (
 	"github.com/mholt/caddy/middleware"
 
 	"blitznote.com/src/caddy.upload/protofile"
+)
+
+var (
+	ErrCannotReadMIMEMultipart = errors.New("Error reading MIME multipart")
 )
 
 // Handler represents a configured instance of this plugin.
@@ -90,7 +94,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error)
 func (h *Handler) ServeMultipartUpload(w http.ResponseWriter, r *http.Request, scope string) (int, error) {
 	mr, err := r.MultipartReader()
 	if err != nil {
-		return http.StatusUnsupportedMediaType, fmt.Errorf("Malformed Content")
+		return http.StatusUnsupportedMediaType, ErrCannotReadMIMEMultipart
 	}
 
 	for {

@@ -6,6 +6,13 @@ import (
 	"time"
 )
 
+var (
+	ErrAuthAlgorithm         = errors.New("Authorization: unsupported 'algorithm'")
+	ErrAuthHeaderFieldPrefix = errors.New("Authorization: mismatch in prefix of 'headers'")
+	ErrAuthHeadersLacking    = errors.New("Authorization: not all expected headers had been set correctly")
+	ErrMethodUnauthorized    = errors.New("Method Not Authorized")
+)
+
 // Results in a syscall issued by 'runtime'.
 func getTimestampUsingTime() uint64 {
 	t := time.Now()
@@ -44,15 +51,15 @@ func (h *Handler) authenticate(r *http.Request) (httpResponseCode int, err error
 
 	if len(a.Signature) == 0 || len(a.HeadersToSign) < 2 ||
 		a.Algorithm != "hmac-sha256" {
-		return http.StatusBadRequest, errors.New("Authorization: unsupported 'algorithm'")
+		return http.StatusBadRequest, ErrAuthAlgorithm
 	}
 	if !(a.HeadersToSign[0] == "date" || a.HeadersToSign[0] == "timestamp") ||
 		a.HeadersToSign[1] != "token" {
-		return http.StatusBadRequest, errors.New("Authorization: mismatch in prefix of 'headers'")
+		return http.StatusBadRequest, ErrAuthHeaderFieldPrefix
 	}
 
 	if !a.CheckFormal(r.Header, getTimestamp(), h.Config.TimestampTolerance) {
-		return http.StatusBadRequest, errors.New("Authorization: not all expected headers had been set correctly")
+		return http.StatusBadRequest, ErrAuthHeadersLacking
 	}
 
 	h.Config.IncomingHmacSecretsLock.RLock()
@@ -63,7 +70,7 @@ func (h *Handler) authenticate(r *http.Request) (httpResponseCode int, err error
 	isSatisfied := a.SatisfiedBy(r.Header, hmacSharedSecret)
 
 	if !secretFound || !isSatisfied {
-		return http.StatusForbidden, errors.New("Method Not Authorized") // 403: forbidden
+		return http.StatusForbidden, ErrMethodUnauthorized // 403: forbidden
 	}
 	return
 }

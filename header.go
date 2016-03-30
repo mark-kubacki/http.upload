@@ -15,13 +15,12 @@ import (
 )
 
 const (
-	ErrStrAuthorizationChallengeNotSupported = "authorization challenge not supported"
-	ErrStrUnexpectedPrefix                   = "unexpected token at position: "
-	ErrStrUnexpectedValuePrefix              = "unexpected value (not in quotes?) at position: "
+	ErrStrUnexpectedPrefix      = "unexpected token at position: "
+	ErrStrUnexpectedValuePrefix = "unexpected value (not in quotes?) at position: "
 )
 
 var (
-	ErrAuthorizationNotSupported = errors.New(ErrStrAuthorizationChallengeNotSupported)
+	ErrAuthorizationNotSupported = errors.New("authorization challenge not supported")
 )
 
 // AuthorizationHeader represents a HTTP header which is used in
