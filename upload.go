@@ -69,12 +69,12 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error)
 		case strings.HasPrefix(ctype, "multipart/form-data"):
 			return h.ServeMultipartUpload(w, r, scope)
 		case ctype != "": // other envelope formats, not implemented
-			return 415, nil // 415: unsupported media type
+			return http.StatusUnsupportedMediaType, nil // 415: unsupported media type
 		}
 		fallthrough
 	case "PUT":
 		if len(r.URL.Path) < 2 {
-			return 400, nil // no filename given
+			return http.StatusBadRequest, nil // no filename given
 		}
 		fileName := r.URL.Path[1:]
 		_, retval, err := h.WriteOneHTTPBlob(scope, fileName, r.Header.Get("Content-Length"), r.Body)
@@ -90,7 +90,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error)
 func (h *Handler) ServeMultipartUpload(w http.ResponseWriter, r *http.Request, scope string) (int, error) {
 	mr, err := r.MultipartReader()
 	if err != nil {
-		return 415, fmt.Errorf("Malformed Content")
+		return http.StatusUnsupportedMediaType, fmt.Errorf("Malformed Content")
 	}
 
 	for {
@@ -99,7 +99,7 @@ func (h *Handler) ServeMultipartUpload(w http.ResponseWriter, r *http.Request, s
 			break
 		}
 		if err != nil {
-			return 400, err
+			return http.StatusBadRequest, err
 		}
 
 		fileName := part.FileName()
@@ -113,7 +113,7 @@ func (h *Handler) ServeMultipartUpload(w http.ResponseWriter, r *http.Request, s
 		}
 	}
 
-	return 200, nil
+	return http.StatusOK, nil
 }
 
 // Translates the 'scope' into a proper directory, and extracts the filename from the resulting string.
@@ -136,7 +136,7 @@ func (h *Handler) splitInDirectoryAndFilename(scope, providedName string) (strin
 func (h *Handler) WriteOneHTTPBlob(scope, fileName, anticipatedSize string, r io.Reader) (int64, int, error) {
 	expectBytes, _ := strconv.ParseInt(anticipatedSize, 10, 64)
 	if anticipatedSize != "" && expectBytes <= 0 { // we cannot work with that
-		return 0, 411, nil // 411: length required
+		return 0, http.StatusLengthRequired, nil // 411: length required
 		// Usually 411 is used for the outermost element.
 		// We don't require any length; but if the key exists, the value must be valid.
 	}
@@ -149,7 +149,7 @@ func (h *Handler) WriteOneHTTPBlob(scope, fileName, anticipatedSize string, r io
 	bytesWritten, err := WriteFileFromReader(path, fname, r, expectBytes)
 	if err != nil {
 		if os.IsExist(err) { // gets thrown on a double race condition when using O_TMPFILE and linkat
-			return 0, 409, err // 409: conflict (most probably a write-after-write)
+			return 0, http.StatusConflict, err // 409: conflict (most probably a write-after-write)
 		}
 		if bytesWritten > 0 && bytesWritten < expectBytes {
 			return bytesWritten, 507, err // 507: insufficient storage
