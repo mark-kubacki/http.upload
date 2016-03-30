@@ -25,15 +25,15 @@ func getTimestampUsingTime() uint64 {
 var getTimestamp = getTimestampUsingTime
 
 // Validates and verifies the authorization header.
-func (h *Handler) authenticate(r *http.Request) (httpResponseCode int, err error) {
+func (h *Handler) authenticate(r *http.Request, config *ScopeConfiguration) (httpResponseCode int, err error) {
 	httpResponseCode = 200 // 200: ok/pass
 
-	h.Config.IncomingHmacSecretsLock.RLock()
-	if len(h.Config.IncomingHmacSecrets) == 0 {
-		h.Config.IncomingHmacSecretsLock.RUnlock()
+	config.IncomingHmacSecretsLock.RLock()
+	if len(config.IncomingHmacSecrets) == 0 {
+		config.IncomingHmacSecretsLock.RUnlock()
 		return
 	}
-	h.Config.IncomingHmacSecretsLock.RUnlock()
+	config.IncomingHmacSecretsLock.RUnlock()
 
 	var a AuthorizationHeader
 	a.Algorithm = "hmac-sha256"
@@ -58,13 +58,13 @@ func (h *Handler) authenticate(r *http.Request) (httpResponseCode int, err error
 		return http.StatusBadRequest, ErrAuthHeaderFieldPrefix
 	}
 
-	if !a.CheckFormal(r.Header, getTimestamp(), h.Config.TimestampTolerance) {
+	if !a.CheckFormal(r.Header, getTimestamp(), config.TimestampTolerance) {
 		return http.StatusBadRequest, ErrAuthHeadersLacking
 	}
 
-	h.Config.IncomingHmacSecretsLock.RLock()
-	hmacSharedSecret, secretFound := h.Config.IncomingHmacSecrets[a.KeyID]
-	h.Config.IncomingHmacSecretsLock.RUnlock()
+	config.IncomingHmacSecretsLock.RLock()
+	hmacSharedSecret, secretFound := config.IncomingHmacSecrets[a.KeyID]
+	config.IncomingHmacSecretsLock.RUnlock()
 
 	// do this anyway to obscure if the keyId exists
 	isSatisfied := a.SatisfiedBy(r.Header, hmacSharedSecret)

@@ -37,12 +37,18 @@ type Handler struct {
 // when you use
 //  curl -T <filename> <url>
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error) {
-	var scope string // aka 'target directory'
+	var (
+		scope  string // a prefix we will need to replace with the target directory
+		config *ScopeConfiguration
+	)
+
 	switch r.Method {
 	case "POST", "PUT":
-		for _, pathPrefix := range h.Config.PathScopes {
-			if middleware.Path(r.URL.Path).Matches(pathPrefix) {
-				scope = pathPrefix
+		// iterate the scopes in the order they have been defined
+		for idx := range h.Config.PathScopes {
+			if middleware.Path(r.URL.Path).Matches(h.Config.PathScopes[idx]) {
+				scope = h.Config.PathScopes[idx]
+				config = h.Config.Scope[scope]
 				break
 			}
 		}
@@ -55,8 +61,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error)
 		return h.Next.ServeHTTP(w, r)
 	}
 
-	if resp, err := h.authenticate(r); err != nil {
-		if h.Config.SilenceAuthErrors {
+	if resp, err := h.authenticate(r, config); err != nil {
+		if config.SilenceAuthErrors {
 			return h.Next.ServeHTTP(w, r)
 		}
 		if resp == 401 {
@@ -71,7 +77,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error)
 		ctype := r.Header.Get("Content-Type")
 		switch {
 		case strings.HasPrefix(ctype, "multipart/form-data"):
-			return h.ServeMultipartUpload(w, r, scope)
+			return h.ServeMultipartUpload(w, r, scope, config.WriteToPath)
 		case ctype != "": // other envelope formats, not implemented
 			return http.StatusUnsupportedMediaType, nil // 415: unsupported media type
 		}
@@ -81,7 +87,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error)
 			return http.StatusBadRequest, nil // no filename given
 		}
 		fileName := r.URL.Path[1:]
-		_, retval, err := h.WriteOneHTTPBlob(scope, fileName, r.Header.Get("Content-Length"), r.Body)
+		_, retval, err := h.WriteOneHTTPBlob(scope, config.WriteToPath, fileName,
+			r.Header.Get("Content-Length"), r.Body)
 		return retval, err
 	}
 
@@ -91,7 +98,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error)
 
 // ServeMultipartUpload explodes one or more supplied files,
 // and feeds them to WriteOneHTTPBlob one by one.
-func (h *Handler) ServeMultipartUpload(w http.ResponseWriter, r *http.Request, scope string) (int, error) {
+func (h *Handler) ServeMultipartUpload(w http.ResponseWriter, r *http.Request,
+	scope, targetPath string) (int, error) {
 	mr, err := r.MultipartReader()
 	if err != nil {
 		return http.StatusUnsupportedMediaType, ErrCannotReadMIMEMultipart
@@ -111,7 +119,7 @@ func (h *Handler) ServeMultipartUpload(w http.ResponseWriter, r *http.Request, s
 			continue
 		}
 
-		_, retval, err := h.WriteOneHTTPBlob(scope, fileName, part.Header.Get("Content-Length"), part)
+		_, retval, err := h.WriteOneHTTPBlob(scope, targetPath, fileName, part.Header.Get("Content-Length"), part)
 		if err != nil {
 			return retval, err
 		}
@@ -121,13 +129,13 @@ func (h *Handler) ServeMultipartUpload(w http.ResponseWriter, r *http.Request, s
 }
 
 // Translates the 'scope' into a proper directory, and extracts the filename from the resulting string.
-func (h *Handler) splitInDirectoryAndFilename(scope, providedName string) (string, string, *os.PathError) {
-	s := strings.TrimPrefix(providedName, scope)               // "/upload/mine/my.blob" → "/mine/my.blob"
-	s = h.Config.WriteToPath + "/" + strings.TrimLeft(s, "./") // → "/var/mine/my.blob"
+func (h *Handler) splitInDirectoryAndFilename(scope, targetPath, providedName string) (string, string, *os.PathError) {
+	s := strings.TrimPrefix(providedName, scope)     // "/upload/mine/my.blob" → "/mine/my.blob"
+	s = targetPath + "/" + strings.TrimLeft(s, "./") // → "/var/mine/my.blob"
 
 	// stop any childish path trickery here
 	ref := filepath.Clean(s) // "/var/mine/../mine/my.blob" → "/var/mine/my.blob"
-	if !strings.HasPrefix(ref, h.Config.WriteToPath) {
+	if !strings.HasPrefix(ref, targetPath) {
 		return "", "", &os.PathError{Op: "create", Path: ref, Err: os.ErrPermission}
 	}
 
@@ -137,7 +145,7 @@ func (h *Handler) splitInDirectoryAndFilename(scope, providedName string) (strin
 
 // WriteOneHTTPBlob adapts WriteFileFromReader to HTTP conventions
 // by translating input and output values.
-func (h *Handler) WriteOneHTTPBlob(scope, fileName, anticipatedSize string, r io.Reader) (int64, int, error) {
+func (h *Handler) WriteOneHTTPBlob(scope, targetPath, fileName, anticipatedSize string, r io.Reader) (int64, int, error) {
 	expectBytes, _ := strconv.ParseInt(anticipatedSize, 10, 64)
 	if anticipatedSize != "" && expectBytes <= 0 { // we cannot work with that
 		return 0, http.StatusLengthRequired, nil // 411: length required
@@ -145,7 +153,7 @@ func (h *Handler) WriteOneHTTPBlob(scope, fileName, anticipatedSize string, r io
 		// We don't require any length; but if the key exists, the value must be valid.
 	}
 
-	path, fname, err1 := h.splitInDirectoryAndFilename(scope, fileName)
+	path, fname, err1 := h.splitInDirectoryAndFilename(scope, targetPath, fileName)
 	if err1 != nil {
 		return 0, 422, os.ErrPermission // 422: unprocessable entity
 	}

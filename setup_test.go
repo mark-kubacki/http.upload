@@ -18,20 +18,20 @@ func TestSetupParse(t *testing.T) {
 			`upload / { to "/var/tmp" }`,
 			nil,
 			HandlerConfiguration{
-				TimestampTolerance:  1 << 2,
-				IncomingHmacSecrets: make(map[string][]byte),
-				PathScopes:          []string{"/"},
-				WriteToPath:         "/var/tmp",
+				PathScopes: []string{"/"},
+				Scope: map[string]*ScopeConfiguration{
+					"/": {
+						TimestampTolerance:  1 << 2,
+						WriteToPath:         "/var/tmp",
+						IncomingHmacSecrets: make(map[string][]byte),
+					},
+				},
 			},
 		},
 		{
 			`upload /`,
 			errors.New("Testfile:1 - Parse error: The destination path 'to' is missing"),
-			HandlerConfiguration{
-				TimestampTolerance:  1 << 2,
-				IncomingHmacSecrets: make(map[string][]byte),
-				PathScopes:          []string{"/"},
-			},
+			HandlerConfiguration{},
 		},
 		{
 			`upload / {
@@ -40,11 +40,15 @@ func TestSetupParse(t *testing.T) {
 			}`,
 			nil,
 			HandlerConfiguration{
-				TimestampTolerance:  1 << 2,
-				IncomingHmacSecrets: make(map[string][]byte),
-				PathScopes:          []string{"/"},
-				WriteToPath:         "/var/tmp",
-				SilenceAuthErrors:   true,
+				PathScopes: []string{"/"},
+				Scope: map[string]*ScopeConfiguration{
+					"/": {
+						TimestampTolerance:  1 << 2,
+						WriteToPath:         "/var/tmp",
+						SilenceAuthErrors:   true,
+						IncomingHmacSecrets: make(map[string][]byte),
+					},
+				},
 			},
 		},
 		{
@@ -54,10 +58,14 @@ func TestSetupParse(t *testing.T) {
 			}`,
 			nil,
 			HandlerConfiguration{
-				TimestampTolerance:  1 << 8,
-				IncomingHmacSecrets: make(map[string][]byte),
-				PathScopes:          []string{"/"},
-				WriteToPath:         "/var/tmp",
+				PathScopes: []string{"/"},
+				Scope: map[string]*ScopeConfiguration{
+					"/": {
+						TimestampTolerance:  1 << 8,
+						WriteToPath:         "/var/tmp",
+						IncomingHmacSecrets: make(map[string][]byte),
+					},
+				},
 			},
 		},
 		{
@@ -66,12 +74,7 @@ func TestSetupParse(t *testing.T) {
 				timestamp_tolerance 33
 			}`,
 			errors.New("Testfile:3 - Parse error: must be ≤ 32"),
-			HandlerConfiguration{
-				TimestampTolerance:  1 << 2,
-				IncomingHmacSecrets: make(map[string][]byte),
-				PathScopes:          []string{"/"},
-				WriteToPath:         "/var/tmp",
-			},
+			HandlerConfiguration{},
 		},
 		{
 			`upload / {
@@ -79,12 +82,7 @@ func TestSetupParse(t *testing.T) {
 				timestamp_tolerance 64
 			}`,
 			errors.New("Testfile:3 - Parse error: we're sorry, but by this time Sol has already melted Terra"),
-			HandlerConfiguration{
-				TimestampTolerance:  1 << 2,
-				IncomingHmacSecrets: make(map[string][]byte),
-				PathScopes:          []string{"/"},
-				WriteToPath:         "/var/tmp",
-			},
+			HandlerConfiguration{},
 		},
 		{
 			`upload / {
@@ -93,11 +91,15 @@ func TestSetupParse(t *testing.T) {
 			}`,
 			nil,
 			HandlerConfiguration{
-				TimestampTolerance: 1 << 2,
-				PathScopes:         []string{"/"},
-				WriteToPath:        "/var/tmp",
-				IncomingHmacSecrets: map[string][]byte{
-					"hmac-key-1": []byte("Mark"),
+				PathScopes: []string{"/"},
+				Scope: map[string]*ScopeConfiguration{
+					"/": {
+						TimestampTolerance: 1 << 2,
+						WriteToPath:        "/var/tmp",
+						IncomingHmacSecrets: map[string][]byte{
+							"hmac-key-1": []byte("Mark"),
+						},
+					},
 				},
 			},
 		},
@@ -107,12 +109,7 @@ func TestSetupParse(t *testing.T) {
 				hmac_keys_in hmac-key-1
 			}`,
 			errors.New("Testfile:3 - Parse error: hmac-key-1"),
-			HandlerConfiguration{
-				TimestampTolerance:  1 << 2,
-				PathScopes:          []string{"/"},
-				WriteToPath:         "/var/tmp",
-				IncomingHmacSecrets: map[string][]byte{},
-			},
+			HandlerConfiguration{},
 		},
 		{
 			`upload / {
@@ -121,12 +118,36 @@ func TestSetupParse(t *testing.T) {
 			}`,
 			nil,
 			HandlerConfiguration{
-				TimestampTolerance: 1 << 2,
-				PathScopes:         []string{"/"},
-				WriteToPath:        "/var/tmp",
-				IncomingHmacSecrets: map[string][]byte{
-					"hmac-key-1": []byte("Mark"),
-					"zween":      []byte("upload"),
+				PathScopes: []string{"/"},
+				Scope: map[string]*ScopeConfiguration{
+					"/": {
+						TimestampTolerance: 1 << 2,
+						WriteToPath:        "/var/tmp",
+						IncomingHmacSecrets: map[string][]byte{
+							"hmac-key-1": []byte("Mark"),
+							"zween":      []byte("upload"),
+						},
+					},
+				},
+			},
+		},
+		{
+			`upload /store { to "/var/tmp" }
+			upload /space { to "/tmp" }`,
+			nil,
+			HandlerConfiguration{
+				PathScopes: []string{"/store", "/space"},
+				Scope: map[string]*ScopeConfiguration{
+					"/store": {
+						TimestampTolerance:  1 << 2,
+						WriteToPath:         "/var/tmp",
+						IncomingHmacSecrets: make(map[string][]byte),
+					},
+					"/space": {
+						TimestampTolerance:  1 << 2,
+						WriteToPath:         "/tmp",
+						IncomingHmacSecrets: make(map[string][]byte),
+					},
 				},
 			},
 		},
@@ -141,11 +162,8 @@ func TestSetupParse(t *testing.T) {
 			if test.expectedErr != nil {
 				So(err, ShouldResemble, test.expectedErr)
 			} else {
-				So(err, ShouldBeNil)
+				So(*gotConf, ShouldResemble, test.expectedConf)
 			}
-
-			// test.postInit(&test.expectedConf)
-			So(*gotConf, ShouldResemble, test.expectedConf)
 		}
 	})
 }
