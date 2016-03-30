@@ -18,13 +18,13 @@ import (
 //
 // If you want to use it outside of Caddy, then implement 'Next' as
 // something with method ServeHTTP and at least the same member variables
-// you can find here.
+// that you can find here.
 type Handler struct {
 	Next   middleware.Handler
 	Config HandlerConfiguration
 }
 
-// Gateway to ServeMultipartUpload and WriteOneHTTPBlob on uploads, else a passthrough.
+// ServeHTTP is a gateway to ServeMultipartUpload and WriteOneHTTPBlob on uploads, else a passthrough.
 //
 // POST
 // is used with
@@ -56,7 +56,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error)
 			return h.Next.ServeHTTP(w, r)
 		}
 		if resp == 401 {
-			// send this header to prevent the user being asked for a username/password pair
+			// send this header to prevent the user from being asked for a username/password pair
 			w.Header().Set("WWW-Authenticate", "Signature")
 		}
 		return resp, err
@@ -85,7 +85,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error)
 	return h.Next.ServeHTTP(w, r)
 }
 
-// Unwraps one or more supplied files, and feeds them to WriteOneHTTPBlob.
+// ServeMultipartUpload explodes one or more supplied files,
+// and feeds them to WriteOneHTTPBlob one by one.
 func (h *Handler) ServeMultipartUpload(w http.ResponseWriter, r *http.Request, scope string) (int, error) {
 	mr, err := r.MultipartReader()
 	if err != nil {
@@ -130,7 +131,8 @@ func (h *Handler) splitInDirectoryAndFilename(scope, providedName string) (strin
 	return filepath.Dir(ref), filepath.Base(ref), nil
 }
 
-// Adapts WriteFileFromReader to HTTP conventions by translating input formats and output values.
+// WriteOneHTTPBlob adapts WriteFileFromReader to HTTP conventions
+// by translating input and output values.
 func (h *Handler) WriteOneHTTPBlob(scope, fileName, anticipatedSize string, r io.Reader) (int64, int, error) {
 	expectBytes, _ := strconv.ParseInt(anticipatedSize, 10, 64)
 	if anticipatedSize != "" && expectBytes <= 0 { // we cannot work with that
@@ -161,14 +163,14 @@ func (h *Handler) WriteOneHTTPBlob(scope, fileName, anticipatedSize string, r io
 	return bytesWritten, 200, nil // 200: all dope
 }
 
-// Unit of work implementing
+// WriteFileFromReader implements an unit of work consisting of
 // • creation of a temporary file,
 // • writing to it,
 // • discarding it on failure ('zap') or
 // • its "emergence" ('persist') into observable namespace.
 //
 // If 'anticipatedSize' ≥ protofile.reserveFileSizeThreshold (usually 32 KiB)
-// then disk space will be reserved before writing by the employed ProtoFileBehaver.
+// then disk space will be reserved before writing (by a ProtoFileBehaver).
 func WriteFileFromReader(path, filename string, r io.Reader, anticipatedSize int64) (int64, error) {
 	wp, err := protofile.IntentNew(path, filename)
 	if err != nil {

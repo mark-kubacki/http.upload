@@ -52,7 +52,7 @@ func TestUploadAuthentication(t *testing.T) {
 			So(w.Header().Get("WWW-Authenticate"), ShouldEqual, "Signature")
 		})
 
-		Convey("pass on valid input", func() {
+		Convey("pass the upload operation on valid input", func() {
 			tempFName := tempFileName()
 			req, err := http.NewRequest("PUT", "/"+tempFName, strings.NewReader("DELME"))
 			if err != nil {

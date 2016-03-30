@@ -56,13 +56,13 @@ func (h *Handler) authenticate(r *http.Request) (httpResponseCode int, err error
 	}
 
 	h.Config.IncomingHmacSecretsLock.RLock()
-	hmacSharedSecret, secretNotFound := h.Config.IncomingHmacSecrets[a.KeyID]
+	hmacSharedSecret, secretFound := h.Config.IncomingHmacSecrets[a.KeyID]
 	h.Config.IncomingHmacSecretsLock.RUnlock()
 
-	// do this anyway to not reveal if the keyId exists
+	// do this anyway to obscure if the keyId exists
 	isSatisfied := a.SatisfiedBy(r.Header, hmacSharedSecret)
 
-	if !secretNotFound || !isSatisfied {
+	if !secretFound || !isSatisfied {
 		return 403, errors.New("Method Not Authorized") // 403: forbidden
 	}
 	return

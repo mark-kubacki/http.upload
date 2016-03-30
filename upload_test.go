@@ -68,7 +68,7 @@ func compareContents(filename string, contents []byte) {
 }
 
 func TestUpload_ServeHTTP(t *testing.T) {
-	Convey("GET is no-op", t, func() {
+	Convey("GET is a no-op", t, func() {
 		h := newTestUploadHander(t, trivialConfig)
 		w := httptest.NewRecorder()
 		req, err := http.NewRequest("GET", "/stuff", strings.NewReader(""))
@@ -82,7 +82,7 @@ func TestUpload_ServeHTTP(t *testing.T) {
 		So(err, ShouldBeNil)
 	})
 
-	Convey("Upload files using PUT", t, func() {
+	Convey("Uploading files using PUT", t, func() {
 		h := newTestUploadHander(t, trivialConfig)
 		w := httptest.NewRecorder()
 
@@ -143,7 +143,7 @@ func TestUpload_ServeHTTP(t *testing.T) {
 		})
 	})
 
-	Convey("Upload files using POST", t, func() {
+	Convey("Uploading files using POST", t, func() {
 		h := newTestUploadHander(t, trivialConfig)
 		w := httptest.NewRecorder()
 
@@ -201,7 +201,7 @@ func TestUpload_ServeHTTP(t *testing.T) {
 			compareContents("/var/tmp/"+tempFName2, []byte("REMOVEME"))
 		})
 
-		Convey("succeeds if two files have the same name (within-transaction overwrite)", func() {
+		Convey("succeeds if two files have the same name (overwriting within the same transaction)", func() {
 			tempFName := tempFileName()
 
 			// START

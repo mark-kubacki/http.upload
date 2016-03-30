@@ -1,13 +1,14 @@
 // Package upload contains a HTTP handler for Caddy,
 // which provides facilities for uploading files.
 //
-// If possible, i. e. if operating- and filesystem implement it,
-// files will not emerge into observable namespace before their first upload is completed.
-// This is of importance to software that monitors a set of paths and
-// reacts to new files. For example, with the intention to trigger uploads
-// to other locations (mirrors).
+// If the operating- and filesystem supports it,
+// files will not appear in the observable namespace before they have been written and closed.
+// This is important with system daemons which monitor a set of paths and
+// trigger actions in the advent of new files:
+// For example, with the effect of uploading said files to other locations (mirrors).
 //
-// Requests are authenticated by sending a header "Authorization" formatted like this:
+// The client is expected to authenticate requests
+// by sending a header "Authorization" formatted like this:
 //
 //  Authorization: Signature keyId="(key_id)",algorithm="hmac-sha256",
 //      headers="timestamp token",signature="(see below)"
@@ -17,13 +18,17 @@
 // github.com/joyent/gosign is an implementation in Golang,
 // github.com/joyent/node-http-signature for Node.js.
 //
-// This is how you generate said signature on the Linux shell:
-//  key="geheim"
+// This is how you generate aforementioned 'signature' on the Linux shell:
+//  secret="geheim"
 //  timestamp="$(date --utc +%s)"
 //  token="streng"
 //
 //  printf "${timestamp}${token}" \
-//  | openssl dgst -sha256 -hmac "${key}" -binary \
+//  | openssl dgst -sha256 -hmac "${secret}" -binary \
 //  | openssl enc -base64
 //
+// After that it's using, for example, 'curl' like this:
+//  curl -T \
+//    --header 'Authorization: …' \
+//    <filename> <url>
 package upload // import "blitznote.com/src/caddy.upload"

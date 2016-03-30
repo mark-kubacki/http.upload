@@ -12,8 +12,9 @@ import (
 	"github.com/mholt/caddy/middleware"
 )
 
-// Configures an UploadHander instance.
-// This is called by Caddy every time the corresponding directive is used.
+// Setup configures an UploadHander instance.
+//
+// This is called by Caddy.
 func Setup(c *setup.Controller) (middleware.Middleware, error) {
 	config, err := parseCaddyConfig(c)
 	if err != nil {
@@ -92,7 +93,9 @@ func parseCaddyConfig(c *setup.Controller) (*HandlerConfiguration, error) {
 	return config, nil
 }
 
-// State of Handler, result of directives found in a 'Caddyfile'.
+// HandlerConfiguration is the result of directives found in a 'Caddyfile'.
+//
+// Can be modified at runtime, except for values that are marked as 'read-only'.
 type HandlerConfiguration struct {
 	// How big a difference between 'now' and the provided timestamp do we tolerate?
 	// In seconds. Due to possible optimizations this should be an order of 2.
@@ -114,7 +117,7 @@ type HandlerConfiguration struct {
 	SilenceAuthErrors bool
 }
 
-// Decodes the arguments and adds/updates them to the existing HMAC shared secrets.
+// AddHmacSecrets decodes the arguments and adds/updates them to the existing HMAC shared secrets.
 //
 // The format of each element is:
 //  key=(base64(value))
