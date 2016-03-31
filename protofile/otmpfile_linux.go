@@ -1,4 +1,4 @@
-// +build linux,!sparc,!sparc64,!alpha,!parisc,!hppa,!gccgo,!appengine
+// +build !appengine
 
 package protofile // import "blitznote.com/src/caddy.upload/protofile"
 
@@ -72,9 +72,18 @@ func (p unixProtoFile) Persist() error {
 	return p.Close()
 }
 
-func (p unixProtoFile) SizeWillBe(numBytes int64) error {
+func (p unixProtoFile) SizeWillBe(numBytes uint64) error {
 	if numBytes <= reserveFileSizeThreshold {
 		return nil
 	}
-	return p.Truncate(numBytes)
+
+	fd := int(p.File.Fd())
+	if numBytes <= maxInt64 {
+		return syscall.Fallocate(fd, 0, 0, int64(numBytes))
+	}
+	err := syscall.Fallocate(fd, 0, 0, maxInt64)
+	if err != nil {
+		return err
+	}
+	return syscall.Fallocate(fd, 0, maxInt64, int64(numBytes-maxInt64))
 }

@@ -1,4 +1,4 @@
-// +build linux,!sparc,!sparc64,!alpha,!parisc,!hppa,!gccgo,!appengine
+// +build !appengine
 
 package protofile // import "blitznote.com/src/caddy.upload/protofile"
 

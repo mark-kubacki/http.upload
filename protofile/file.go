@@ -10,6 +10,9 @@ const (
 	// If a file is expected to be smaller than this (in bytes) won't seek
 	// to EOF for writing a single byte, which would've "announced" the final size.
 	reserveFileSizeThreshold = 1 << 15
+
+	// needed for file allocations
+	maxInt64 = 1<<63 - 1
 )
 
 type ProtoFileBehaver interface {
@@ -20,7 +23,7 @@ type ProtoFileBehaver interface {
 	Persist() error
 
 	// Reserves space on disk for the file contents.
-	SizeWillBe(numBytes int64) error
+	SizeWillBe(numBytes uint64) error
 
 	io.Writer
 }
@@ -80,14 +83,4 @@ func (p generalizedProtoFile) Persist() error {
 	}
 	p.persisted = true
 	return p.File.Close()
-}
-
-// Asks the filesystem to reserve some space for this file's contents.
-// This could result in a sparse file (if you wrote less than anticipated)
-// or shrink the file.
-func (p generalizedProtoFile) SizeWillBe(numBytes int64) error {
-	if numBytes <= reserveFileSizeThreshold {
-		return nil
-	}
-	return p.Truncate(numBytes)
 }

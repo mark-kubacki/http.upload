@@ -14,6 +14,11 @@ import (
 	"blitznote.com/src/caddy.upload/protofile"
 )
 
+const (
+	// at this point this is an arbitrary number
+	reportProgressEveryBytes = 1 << 15
+)
+
 var (
 	ErrCannotReadMIMEMultipart = errors.New("Error reading MIME multipart")
 	ErrFileNameConflict        = errors.New("Name-Name Conflict")
@@ -145,8 +150,8 @@ func (h *Handler) splitInDirectoryAndFilename(scope, targetPath, providedName st
 
 // WriteOneHTTPBlob adapts WriteFileFromReader to HTTP conventions
 // by translating input and output values.
-func (h *Handler) WriteOneHTTPBlob(scope, targetPath, fileName, anticipatedSize string, r io.Reader) (int64, int, error) {
-	expectBytes, _ := strconv.ParseInt(anticipatedSize, 10, 64)
+func (h *Handler) WriteOneHTTPBlob(scope, targetPath, fileName, anticipatedSize string, r io.Reader) (uint64, int, error) {
+	expectBytes, _ := strconv.ParseUint(anticipatedSize, 10, 64)
 	if anticipatedSize != "" && expectBytes <= 0 { // we cannot work with that
 		return 0, http.StatusLengthRequired, nil // 411: length required
 		// Usually 411 is used for the outermost element.
@@ -158,7 +163,7 @@ func (h *Handler) WriteOneHTTPBlob(scope, targetPath, fileName, anticipatedSize 
 		return 0, 422, os.ErrPermission // 422: unprocessable entity
 	}
 
-	bytesWritten, err := WriteFileFromReader(path, fname, r, expectBytes)
+	bytesWritten, err := WriteFileFromReader(path, fname, r, expectBytes, noopUploadProgressCallback)
 	if err != nil {
 		if os.IsExist(err) || // gets thrown on a double race condition when using O_TMPFILE and linkat
 			strings.HasSuffix(err.Error(), "not a directory") {
@@ -176,6 +181,10 @@ func (h *Handler) WriteOneHTTPBlob(scope, targetPath, fileName, anticipatedSize 
 	return bytesWritten, 200, nil // 200: all dope
 }
 
+func noopUploadProgressCallback(bytesWritten uint64, err error) {
+	// I want to become a closure that updates a data structure.
+}
+
 // WriteFileFromReader implements an unit of work consisting of
 // • creation of a temporary file,
 // • writing to it,
@@ -184,7 +193,12 @@ func (h *Handler) WriteOneHTTPBlob(scope, targetPath, fileName, anticipatedSize 
 //
 // If 'anticipatedSize' ≥ protofile.reserveFileSizeThreshold (usually 32 KiB)
 // then disk space will be reserved before writing (by a ProtoFileBehaver).
-func WriteFileFromReader(path, filename string, r io.Reader, anticipatedSize int64) (int64, error) {
+//
+// uploadProgressCallback is called every so often with the number of bytes
+// read for the file, and any errors that might have occured.
+// "error" remaining 'io.EOF' after all bytes have been read indicates success.
+func WriteFileFromReader(path, filename string, r io.Reader, anticipatedSize uint64,
+	uploadProgressCallback func(uint64, error)) (uint64, error) {
 	wp, err := protofile.IntentNew(path, filename)
 	if err != nil {
 		return 0, err
@@ -192,12 +206,27 @@ func WriteFileFromReader(path, filename string, r io.Reader, anticipatedSize int
 	w := *wp
 	defer w.Zap()
 
-	w.SizeWillBe(anticipatedSize)
-
-	n, err := io.Copy(w, r)
+	err = w.SizeWillBe(anticipatedSize)
 	if err != nil {
-		return n, err
+		return 0, err
+	}
+
+	var bytesWritten uint64
+	var n int64
+	for err == nil {
+		n, err = io.CopyN(w, r, reportProgressEveryBytes)
+		if err == nil || err == io.EOF {
+			bytesWritten += uint64(n)
+			uploadProgressCallback(bytesWritten, err)
+		}
+	}
+
+	if err != nil && err != io.EOF {
+		return bytesWritten, err
 	}
 	err = w.Persist()
-	return n, err
+	if err != nil {
+		uploadProgressCallback(bytesWritten, err)
+	}
+	return bytesWritten, err
 }
