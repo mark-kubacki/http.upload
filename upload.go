@@ -16,6 +16,7 @@ import (
 
 var (
 	ErrCannotReadMIMEMultipart = errors.New("Error reading MIME multipart")
+	ErrFileNameConflict        = errors.New("Name-Name Conflict")
 )
 
 // Handler represents a configured instance of this plugin.
@@ -86,8 +87,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error)
 		if len(r.URL.Path) < 2 {
 			return http.StatusBadRequest, nil // no filename given
 		}
-		fileName := r.URL.Path[1:]
-		_, retval, err := h.WriteOneHTTPBlob(scope, config.WriteToPath, fileName,
+		_, retval, err := h.WriteOneHTTPBlob(scope, config.WriteToPath, r.URL.Path,
 			r.Header.Get("Content-Length"), r.Body)
 		return retval, err
 	}
@@ -160,8 +160,9 @@ func (h *Handler) WriteOneHTTPBlob(scope, targetPath, fileName, anticipatedSize 
 
 	bytesWritten, err := WriteFileFromReader(path, fname, r, expectBytes)
 	if err != nil {
-		if os.IsExist(err) { // gets thrown on a double race condition when using O_TMPFILE and linkat
-			return 0, http.StatusConflict, err // 409: conflict (most probably a write-after-write)
+		if os.IsExist(err) || // gets thrown on a double race condition when using O_TMPFILE and linkat
+			strings.HasSuffix(err.Error(), "not a directory") {
+			return 0, http.StatusConflict, ErrFileNameConflict // 409
 		}
 		if bytesWritten > 0 && bytesWritten < expectBytes {
 			return bytesWritten, 507, err // 507: insufficient storage

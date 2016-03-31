@@ -106,6 +106,29 @@ func TestUpload_ServeHTTP(t *testing.T) {
 			compareContents("/var/tmp/"+tempFName, []byte("DELME"))
 		})
 
+		Convey("strips the prefix correctly", func() {
+			scopeName := tempFileName()
+			pathName, fileName := tempFileName(), tempFileName()
+
+			h := newTestUploadHander(t, `upload /`+scopeName+` { to "/var/tmp" }`)
+			req, err := http.NewRequest("PUT", "/"+scopeName+"/"+pathName+"/"+fileName, strings.NewReader("DELME"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() {
+				os.RemoveAll("/var/tmp/" + scopeName)
+			}()
+			defer func() {
+				os.RemoveAll("/var/tmp/" + pathName)
+			}()
+
+			code, _ := h.ServeHTTP(w, req)
+			So(code, ShouldEqual, 200)
+
+			_, err = os.Stat("/var/tmp/" + scopeName)
+			So(os.IsNotExist(err), ShouldBeTrue)
+		})
+
 		Convey("succeeds with a size announced too large", func() {
 			tempFName := tempFileName()
 			req, err := http.NewRequest("PUT", "/"+tempFName, strings.NewReader("DELME"))
@@ -246,6 +269,63 @@ func TestUpload_ServeHTTP(t *testing.T) {
 			code, err := h.ServeHTTP(w, req)
 			So(code, ShouldEqual, 415)
 			So(err, ShouldBeNil)
+		})
+	})
+
+	Convey("Handling of conflicts includes", t, func() {
+		h := newTestUploadHander(t, trivialConfig)
+		w := httptest.NewRecorder()
+
+		Convey("name clashes between directories and new filename", func() {
+			tempFName := tempFileName()
+			req, err := http.NewRequest("PUT", "/"+tempFName+"/"+tempFName, strings.NewReader("DELME"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() {
+				os.Remove("/var/tmp/" + tempFName + "/" + tempFName)
+			}()
+
+			code, _ := h.ServeHTTP(w, req)
+			So(code, ShouldEqual, 200)
+
+			// write to directory /var/tmp/${tempFName}
+			req, err = http.NewRequest("PUT", "/"+tempFName, strings.NewReader("DELME"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() {
+				os.RemoveAll("/var/tmp/" + tempFName)
+			}()
+
+			code, _ = h.ServeHTTP(w, req)
+			So(code, ShouldEqual, 409) // 409: conflict
+		})
+
+		Convey("name clashes between filename and new directory", func() {
+			tempFName := tempFileName()
+			req, err := http.NewRequest("PUT", "/"+tempFName, strings.NewReader("DELME"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() {
+				os.Remove("/var/tmp/" + tempFName)
+			}()
+
+			code, _ := h.ServeHTTP(w, req)
+			So(code, ShouldEqual, 200)
+
+			// write to directory /var/tmp/${tempFName}
+			req, err = http.NewRequest("PUT", "/"+tempFName+"/"+tempFName, strings.NewReader("DELME"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() {
+				os.RemoveAll("/var/tmp/" + tempFName + "/" + tempFName)
+			}()
+
+			code, _ = h.ServeHTTP(w, req)
+			So(code, ShouldEqual, 409) // 409: conflict
 		})
 	})
 }
