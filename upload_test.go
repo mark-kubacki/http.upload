@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -16,12 +18,19 @@ import (
 	. "github.com/smartystreets/goconvey/convey"
 )
 
-const (
-	// insist on /var/tmp for tests, because /tmp could be tmpfs
-	trivialConfig = `upload / {
-		to "/var/tmp"
-	}`
+var (
+	scratchDir    string // tests will create files and directories here
+	trivialConfig string
 )
+
+func init() {
+	scratchDir = os.TempDir()
+
+	// don't pull in package 'fmt' for this
+	trivialConfig = `upload / {
+		to "` + scratchDir + `"
+	}`
+}
 
 func newTestUploadHander(t *testing.T, configExcerpt string) middleware.Handler {
 	c := setup.NewTestController(configExcerpt)
@@ -94,7 +103,7 @@ func TestUpload_ServeHTTP(t *testing.T) {
 			}
 			req.Header.Set("Content-Length", "5")
 			defer func() {
-				os.Remove("/var/tmp/" + tempFName)
+				os.Remove(filepath.Join(scratchDir, tempFName))
 			}()
 
 			code, err := h.ServeHTTP(w, req)
@@ -103,29 +112,29 @@ func TestUpload_ServeHTTP(t *testing.T) {
 			}
 			So(code, ShouldEqual, 200)
 
-			compareContents("/var/tmp/"+tempFName, []byte("DELME"))
+			compareContents(filepath.Join(scratchDir, tempFName), []byte("DELME"))
 		})
 
 		Convey("strips the prefix correctly", func() {
 			scopeName := tempFileName()
 			pathName, fileName := tempFileName(), tempFileName()
 
-			h := newTestUploadHander(t, `upload /`+scopeName+` { to "/var/tmp" }`)
+			h := newTestUploadHander(t, `upload /`+scopeName+` { to "`+scratchDir+`" }`)
 			req, err := http.NewRequest("PUT", "/"+scopeName+"/"+pathName+"/"+fileName, strings.NewReader("DELME"))
 			if err != nil {
 				t.Fatal(err)
 			}
 			defer func() {
-				os.RemoveAll("/var/tmp/" + scopeName)
+				os.RemoveAll(filepath.Join(scratchDir, scopeName))
 			}()
 			defer func() {
-				os.RemoveAll("/var/tmp/" + pathName)
+				os.RemoveAll(filepath.Join(scratchDir, pathName))
 			}()
 
 			code, _ := h.ServeHTTP(w, req)
 			So(code, ShouldEqual, 200)
 
-			_, err = os.Stat("/var/tmp/" + scopeName)
+			_, err = os.Stat(filepath.Join(scratchDir, scopeName))
 			So(os.IsNotExist(err), ShouldBeTrue)
 		})
 
@@ -137,7 +146,7 @@ func TestUpload_ServeHTTP(t *testing.T) {
 			}
 			req.Header.Set("Content-Length", "20")
 			defer func() {
-				os.Remove("/var/tmp/" + tempFName)
+				os.Remove(filepath.Join(scratchDir, tempFName))
 			}()
 
 			code, err := h.ServeHTTP(w, req)
@@ -146,12 +155,12 @@ func TestUpload_ServeHTTP(t *testing.T) {
 			}
 			So(code, ShouldEqual, 202)
 
-			compareContents("/var/tmp/"+tempFName, []byte("DELME"))
+			compareContents(filepath.Join(scratchDir, tempFName), []byte("DELME"))
 		})
 
 		Convey("gets aborted for files below the writable path", func() {
 			tempFName := tempFileName()
-			req, err := http.NewRequest("PUT", "/nop/../../../tmp/"+tempFName, strings.NewReader("DELME"))
+			req, err := http.NewRequest("PUT", "/nop/../../../tmp/../"+tempFName, strings.NewReader("DELME"))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -177,7 +186,7 @@ func TestUpload_ServeHTTP(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer func() {
-				os.Remove("/var/tmp/" + tempFName)
+				os.Remove(filepath.Join(scratchDir, tempFName))
 			}()
 
 			code, err := h.ServeHTTP(w, req)
@@ -186,7 +195,7 @@ func TestUpload_ServeHTTP(t *testing.T) {
 			}
 			So(code, ShouldEqual, 200)
 
-			compareContents("/var/tmp/"+tempFName, []byte("DELME"))
+			compareContents(filepath.Join(scratchDir, tempFName), []byte("DELME"))
 		})
 
 		Convey("succeeds with two trivially small files", func() {
@@ -208,10 +217,10 @@ func TestUpload_ServeHTTP(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer func() {
-				os.Remove("/var/tmp/" + tempFName)
+				os.Remove(filepath.Join(scratchDir, tempFName))
 			}()
 			defer func() {
-				os.Remove("/var/tmp/" + tempFName2)
+				os.Remove(filepath.Join(scratchDir, tempFName2))
 			}()
 
 			code, err := h.ServeHTTP(w, req)
@@ -220,8 +229,8 @@ func TestUpload_ServeHTTP(t *testing.T) {
 			}
 			So(code, ShouldEqual, 200)
 
-			compareContents("/var/tmp/"+tempFName, []byte("DELME"))
-			compareContents("/var/tmp/"+tempFName2, []byte("REMOVEME"))
+			compareContents(filepath.Join(scratchDir, tempFName), []byte("DELME"))
+			compareContents(filepath.Join(scratchDir, tempFName2), []byte("REMOVEME"))
 		})
 
 		Convey("succeeds if two files have the same name (overwriting within the same transaction)", func() {
@@ -243,7 +252,7 @@ func TestUpload_ServeHTTP(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer func() {
-				os.Remove("/var/tmp/" + tempFName)
+				os.Remove(filepath.Join(scratchDir, tempFName))
 			}()
 
 			code, err := h.ServeHTTP(w, req)
@@ -252,7 +261,7 @@ func TestUpload_ServeHTTP(t *testing.T) {
 			}
 			So(code, ShouldEqual, 200)
 
-			compareContents("/var/tmp/"+tempFName, []byte("DELME"))
+			compareContents(filepath.Join(scratchDir, tempFName), []byte("DELME"))
 		})
 
 		Convey("fails on unknown envelope formats", func() {
@@ -263,7 +272,7 @@ func TestUpload_ServeHTTP(t *testing.T) {
 			}
 			req.Header.Set("Content-Type", "chunks-of/base64")
 			defer func() {
-				os.Remove("/var/tmp/" + tempFName)
+				os.Remove(filepath.Join(scratchDir, tempFName))
 			}()
 
 			code, err := h.ServeHTTP(w, req)
@@ -283,7 +292,7 @@ func TestUpload_ServeHTTP(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer func() {
-				os.Remove("/var/tmp/" + tempFName + "/" + tempFName)
+				os.Remove(filepath.Join(scratchDir, tempFName, tempFName))
 			}()
 
 			code, _ := h.ServeHTTP(w, req)
@@ -295,11 +304,15 @@ func TestUpload_ServeHTTP(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer func() {
-				os.RemoveAll("/var/tmp/" + tempFName)
+				os.RemoveAll(filepath.Join(scratchDir, tempFName))
 			}()
 
 			code, _ = h.ServeHTTP(w, req)
-			So(code, ShouldEqual, 409) // 409: conflict
+			if runtime.GOOS == "windows" {
+				So(code, ShouldBeIn, 409, 500)
+			} else {
+				So(code, ShouldEqual, 409) // 409: conflict
+			}
 		})
 
 		Convey("name clashes between filename and new directory", func() {
@@ -309,7 +322,7 @@ func TestUpload_ServeHTTP(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer func() {
-				os.Remove("/var/tmp/" + tempFName)
+				os.Remove(filepath.Join(scratchDir, tempFName))
 			}()
 
 			code, _ := h.ServeHTTP(w, req)
@@ -321,11 +334,15 @@ func TestUpload_ServeHTTP(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer func() {
-				os.RemoveAll("/var/tmp/" + tempFName + "/" + tempFName)
+				os.RemoveAll(filepath.Join(scratchDir, tempFName, tempFName))
 			}()
 
 			code, _ = h.ServeHTTP(w, req)
-			So(code, ShouldEqual, 409) // 409: conflict
+			if runtime.GOOS == "windows" {
+				So(code, ShouldBeIn, 409, 500)
+			} else {
+				So(code, ShouldEqual, 409) // 409: conflict
+			}
 		})
 	})
 }

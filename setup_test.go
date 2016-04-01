@@ -2,6 +2,7 @@ package upload // import "blitznote.com/src/caddy.upload"
 
 import (
 	"errors"
+	"os"
 	"testing"
 
 	"github.com/mholt/caddy/caddy/setup"
@@ -9,20 +10,22 @@ import (
 )
 
 func TestSetupParse(t *testing.T) {
+	scratchDir := os.TempDir()
+
 	tests := []struct {
 		config       string
 		expectedErr  error
 		expectedConf HandlerConfiguration
 	}{
 		{
-			`upload / { to "/var/tmp" }`,
+			`upload / { to "` + scratchDir + `" }`,
 			nil,
 			HandlerConfiguration{
 				PathScopes: []string{"/"},
 				Scope: map[string]*ScopeConfiguration{
 					"/": {
 						TimestampTolerance:  1 << 2,
-						WriteToPath:         "/var/tmp",
+						WriteToPath:         scratchDir,
 						IncomingHmacSecrets: make(map[string][]byte),
 					},
 				},
@@ -35,7 +38,7 @@ func TestSetupParse(t *testing.T) {
 		},
 		{
 			`upload / {
-				to "/var/tmp"
+				to "` + scratchDir + `"
 				silent_auth_errors
 			}`,
 			nil,
@@ -44,7 +47,7 @@ func TestSetupParse(t *testing.T) {
 				Scope: map[string]*ScopeConfiguration{
 					"/": {
 						TimestampTolerance:  1 << 2,
-						WriteToPath:         "/var/tmp",
+						WriteToPath:         scratchDir,
 						SilenceAuthErrors:   true,
 						IncomingHmacSecrets: make(map[string][]byte),
 					},
@@ -53,7 +56,7 @@ func TestSetupParse(t *testing.T) {
 		},
 		{
 			`upload / {
-				to "/var/tmp"
+				to "` + scratchDir + `"
 				timestamp_tolerance 8
 			}`,
 			nil,
@@ -62,7 +65,7 @@ func TestSetupParse(t *testing.T) {
 				Scope: map[string]*ScopeConfiguration{
 					"/": {
 						TimestampTolerance:  1 << 8,
-						WriteToPath:         "/var/tmp",
+						WriteToPath:         scratchDir,
 						IncomingHmacSecrets: make(map[string][]byte),
 					},
 				},
@@ -70,7 +73,7 @@ func TestSetupParse(t *testing.T) {
 		},
 		{
 			`upload / {
-				to "/var/tmp"
+				to "` + scratchDir + `"
 				timestamp_tolerance 33
 			}`,
 			errors.New("Testfile:3 - Parse error: must be ≤ 32"),
@@ -78,7 +81,7 @@ func TestSetupParse(t *testing.T) {
 		},
 		{
 			`upload / {
-				to "/var/tmp"
+				to "` + scratchDir + `"
 				timestamp_tolerance 64
 			}`,
 			errors.New("Testfile:3 - Parse error: we're sorry, but by this time Sol has already melted Terra"),
@@ -86,7 +89,7 @@ func TestSetupParse(t *testing.T) {
 		},
 		{
 			`upload / {
-				to "/var/tmp"
+				to "` + scratchDir + `"
 				hmac_keys_in hmac-key-1=TWFyaw==
 			}`,
 			nil,
@@ -95,7 +98,7 @@ func TestSetupParse(t *testing.T) {
 				Scope: map[string]*ScopeConfiguration{
 					"/": {
 						TimestampTolerance: 1 << 2,
-						WriteToPath:        "/var/tmp",
+						WriteToPath:        scratchDir,
 						IncomingHmacSecrets: map[string][]byte{
 							"hmac-key-1": []byte("Mark"),
 						},
@@ -105,7 +108,7 @@ func TestSetupParse(t *testing.T) {
 		},
 		{
 			`upload / {
-				to "/var/tmp"
+				to "` + scratchDir + `"
 				hmac_keys_in hmac-key-1
 			}`,
 			errors.New("Testfile:3 - Parse error: hmac-key-1"),
@@ -113,7 +116,7 @@ func TestSetupParse(t *testing.T) {
 		},
 		{
 			`upload / {
-				to "/var/tmp"
+				to "` + scratchDir + `"
 				hmac_keys_in hmac-key-1=TWFyaw== zween=dXBsb2Fk
 			}`,
 			nil,
@@ -122,7 +125,7 @@ func TestSetupParse(t *testing.T) {
 				Scope: map[string]*ScopeConfiguration{
 					"/": {
 						TimestampTolerance: 1 << 2,
-						WriteToPath:        "/var/tmp",
+						WriteToPath:        scratchDir,
 						IncomingHmacSecrets: map[string][]byte{
 							"hmac-key-1": []byte("Mark"),
 							"zween":      []byte("upload"),
@@ -132,20 +135,20 @@ func TestSetupParse(t *testing.T) {
 			},
 		},
 		{
-			`upload /store { to "/var/tmp" }
-			upload /space { to "/tmp" }`,
+			`upload /store { to "` + scratchDir + `" }
+			upload /space { to "/" }`,
 			nil,
 			HandlerConfiguration{
 				PathScopes: []string{"/store", "/space"},
 				Scope: map[string]*ScopeConfiguration{
 					"/store": {
 						TimestampTolerance:  1 << 2,
-						WriteToPath:         "/var/tmp",
+						WriteToPath:         scratchDir,
 						IncomingHmacSecrets: make(map[string][]byte),
 					},
 					"/space": {
 						TimestampTolerance:  1 << 2,
-						WriteToPath:         "/tmp",
+						WriteToPath:         "/",
 						IncomingHmacSecrets: make(map[string][]byte),
 					},
 				},

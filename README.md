@@ -2,6 +2,7 @@ Upload for Caddy
 ================
 
 [![Build Status](https://semaphoreci.com/api/v1/wmark/caddy-upload/branches/master/badge.svg)](https://semaphoreci.com/wmark/caddy-upload)
+[![Windows Build Status](https://img.shields.io/appveyor/ci/wmark/caddy-upload.svg?style=flat&label=windows+build)](https://ci.appveyor.com/project/wmark/caddy-upload/branch/master)
 [![Coverage Status](https://coveralls.io/repos/github/wmark/caddy.upload/badge.svg?branch=master)](https://coveralls.io/github/wmark/caddy.upload?branch=master)
 [![GoDoc](https://godoc.org/blitznote.com/src/caddy.upload?status.svg)](https://godoc.org/blitznote.com/src/caddy.upload)
 

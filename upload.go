@@ -135,8 +135,8 @@ func (h *Handler) ServeMultipartUpload(w http.ResponseWriter, r *http.Request,
 
 // Translates the 'scope' into a proper directory, and extracts the filename from the resulting string.
 func (h *Handler) splitInDirectoryAndFilename(scope, targetPath, providedName string) (string, string, *os.PathError) {
-	s := strings.TrimPrefix(providedName, scope)     // "/upload/mine/my.blob" → "/mine/my.blob"
-	s = targetPath + "/" + strings.TrimLeft(s, "./") // → "/var/mine/my.blob"
+	s := strings.TrimPrefix(providedName, scope)             // "/upload/mine/my.blob" → "/mine/my.blob"
+	s = filepath.Join(targetPath, strings.TrimLeft(s, "./")) // → "/var/mine/my.blob"
 
 	// stop any childish path trickery here
 	ref := filepath.Clean(s) // "/var/mine/../mine/my.blob" → "/var/mine/my.blob"

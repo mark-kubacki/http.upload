@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -15,12 +16,19 @@ import (
 	. "github.com/smartystreets/goconvey/convey"
 )
 
-const (
+var (
+	trivialConfigWithAuth string
+)
+
+func init() {
+	scratchDir = os.TempDir()
+
+	// don't pull in package 'fmt' for this
 	trivialConfigWithAuth = `upload / {
-		to "/var/tmp"
+		to "` + scratchDir + `"
 		hmac_keys_in hmac-key-1=TWFyaw== zween=dXBsb2Fk
 	}`
-)
+}
 
 func computeSignature(secret []byte, headerContents []string) string {
 	mac := hmac.New(sha256.New, secret)
@@ -60,7 +68,7 @@ func TestUploadAuthentication(t *testing.T) {
 			}
 			req.Header.Set("Content-Length", "5")
 			defer func() {
-				os.Remove("/var/tmp/" + tempFName)
+				os.Remove(filepath.Join(scratchDir, tempFName))
 			}()
 			ts := strconv.FormatUint(getTimestampUsingTime(), 10)
 			req.Header.Set("Timestamp", ts)
@@ -72,7 +80,7 @@ func TestUploadAuthentication(t *testing.T) {
 			So(code, ShouldEqual, 200)
 			So(err, ShouldBeNil)
 
-			compareContents("/var/tmp/"+tempFName, []byte("DELME"))
+			compareContents(filepath.Join(scratchDir, tempFName), []byte("DELME"))
 		})
 	})
 }
