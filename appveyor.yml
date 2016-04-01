@@ -1,0 +1,29 @@
+version: "{build}"
+
+os: Windows Server 2012 R2
+
+clone_folder: c:\gopath\src\blitznote.com\src\caddy.upload
+
+environment:
+  GOPATH: c:\gopath
+  CGO_ENABLED: 0
+
+install:
+  - rmdir c:\go /s /q
+  - appveyor DownloadFile https://storage.googleapis.com/golang/go1.6.windows-amd64.zip
+  - 7z x go1.6.windows-amd64.zip -y -oC:\ > NUL
+  - go version
+  - go env
+  - go get -t ./...
+  - go get golang.org/x/tools/cmd/vet
+  - go get github.com/gordonklaus/ineffassign
+  - set PATH=%GOPATH%\bin;%PATH%
+
+build: off
+
+test_script:
+  - ineffassign .
+  - go vet ./...
+  - go test ./...
+
+deploy: off

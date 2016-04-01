@@ -14,14 +14,20 @@ addons:
   - hub.blitznote.com
 
 install:
-  - go get -t ./...
+  - go get -d -t blitznote.com/src/caddy.upload
   - go get github.com/mattn/goveralls
   - go get golang.org/x/tools/cmd/cover
   - go get golang.org/x/tools/cmd/vet
   - go get github.com/gordonklaus/ineffassign
 
+before_script:
+  - cd ../../../blitznote.com/src/caddy.upload
+
 script:
   - diff <(echo -n) <(gofmt -s -d .)
   - ineffassign .
   - go vet ./...
-  - goveralls -service=travis-ci
+  - go test -covermode=count -coverprofile=profile.cov ./.
+
+after_script:
+  - goveralls -coverprofile=profile.cov -service=travis-ci
