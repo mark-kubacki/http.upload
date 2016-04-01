@@ -21,6 +21,24 @@ func Setup(c *setup.Controller) (middleware.Middleware, error) {
 		return nil, err
 	}
 
+	if !config.siteHasTLS {
+		if c.Dispenser.File() == "Testfile" {
+			goto pass
+		}
+		for _, host := range []string{"127.0.0.1", "localhost", "[::1]", "::1"} {
+			if c.Config.Host == host || strings.HasPrefix(c.Config.Host, host) {
+				goto pass
+			}
+		}
+
+		for _, scopeConf := range config.Scope {
+			if !scopeConf.AcknowledgedNoTLS {
+				return nil, c.Err("You are using plugin 'upload' on a site without TLS.")
+			}
+		}
+	}
+
+pass:
 	return func(next middleware.Handler) middleware.Handler {
 		return &Handler{
 			Next:   next,
@@ -46,6 +64,9 @@ type ScopeConfiguration struct {
 	// A skilled attacked will monitor traffic, and timings.
 	// Enabling this merely obscures the path.
 	SilenceAuthErrors bool
+
+	// The user must set a "flag of shame" for sites that don't use TLS with 'upload'. (read-only)
+	AcknowledgedNoTLS bool
 }
 
 // HandlerConfiguration is the result of directives found in a 'Caddyfile'.
@@ -59,12 +80,16 @@ type HandlerConfiguration struct {
 
 	// every scope (path) can be configured differently
 	Scope map[string]*ScopeConfiguration
+
+	// Used on initialization to effect a reminder to the user to use TLS on sites with 'upload'.
+	siteHasTLS bool
 }
 
 func parseCaddyConfig(c *setup.Controller) (*HandlerConfiguration, error) {
 	siteConfig := &HandlerConfiguration{
 		PathScopes: make([]string, 0, 1),
 		Scope:      make(map[string]*ScopeConfiguration),
+		siteHasTLS: c.Config != nil && c.Config.TLS.Enabled,
 	}
 
 	for c.Next() {
@@ -121,6 +146,8 @@ func parseCaddyConfig(c *setup.Controller) (*HandlerConfiguration, error) {
 				config.TimestampTolerance = 1 << s
 			case "silent_auth_errors":
 				config.SilenceAuthErrors = true
+			case "yes_without_tls":
+				config.AcknowledgedNoTLS = true
 			}
 		}
 
