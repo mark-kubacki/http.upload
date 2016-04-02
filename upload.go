@@ -22,6 +22,7 @@ const (
 var (
 	ErrCannotReadMIMEMultipart = errors.New("Error reading MIME multipart")
 	ErrFileNameConflict        = errors.New("Name-Name Conflict")
+	ErrInvalidFileName         = errors.New("Invalid filename") // includes the path
 )
 
 // Handler represents a configured instance of this plugin.
@@ -134,18 +135,26 @@ func (h *Handler) ServeMultipartUpload(w http.ResponseWriter, r *http.Request,
 }
 
 // Translates the 'scope' into a proper directory, and extracts the filename from the resulting string.
-func (h *Handler) splitInDirectoryAndFilename(scope, targetPath, providedName string) (string, string, *os.PathError) {
-	s := strings.TrimPrefix(providedName, scope)             // "/upload/mine/my.blob" → "/mine/my.blob"
-	s = filepath.Join(targetPath, strings.TrimLeft(s, "./")) // → "/var/mine/my.blob"
+func (h *Handler) translateForFilesystem(scope, targetPath, providedName string) (fsPath, fsFilename string, err error) {
+	// 'uc' is freely controlled by the uploader
+	uc := strings.TrimPrefix(providedName, scope)              // "/upload/mine/my.blob" → "/mine/my.blob"
+	s := filepath.Join(targetPath, strings.TrimLeft(uc, "./")) // → "/var/mine/my.blob"
 
 	// stop any childish path trickery here
-	ref := filepath.Clean(s) // "/var/mine/../mine/my.blob" → "/var/mine/my.blob"
-	if !strings.HasPrefix(ref, targetPath) {
-		return "", "", &os.PathError{Op: "create", Path: ref, Err: os.ErrPermission}
+	translated := filepath.Clean(s) // "/var/mine/../mine/my.blob" → "/var/mine/my.blob"
+	if !strings.HasPrefix(translated, targetPath) {
+		err = os.ErrPermission
+		return
 	}
 
-	// extract path from filename
-	return filepath.Dir(ref), filepath.Base(ref), nil
+	if !IsAcceptableFilename(uc, nil, nil) {
+		err = ErrInvalidFileName
+		return
+	}
+
+	fsPath, fsFilename = filepath.Dir(translated), filepath.Base(translated)
+
+	return
 }
 
 // WriteOneHTTPBlob adapts WriteFileFromReader to HTTP conventions
@@ -158,8 +167,8 @@ func (h *Handler) WriteOneHTTPBlob(scope, targetPath, fileName, anticipatedSize 
 		// We don't require any length; but if the key exists, the value must be valid.
 	}
 
-	path, fname, err1 := h.splitInDirectoryAndFilename(scope, targetPath, fileName)
-	if err1 != nil {
+	path, fname, err := h.translateForFilesystem(scope, targetPath, fileName)
+	if err != nil {
 		return 0, 422, os.ErrPermission // 422: unprocessable entity
 	}
 
