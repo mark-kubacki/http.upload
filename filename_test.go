@@ -110,3 +110,30 @@ func TestIsAcceptableFilename(t *testing.T) {
 		})
 	})
 }
+
+func TestParseUnicodeBlockList(t *testing.T) {
+	Convey("ParseUnicodeBlockList works", t, FailureContinues, func() {
+		samples := []struct {
+			input string
+			table *unicode.RangeTable
+			err   error
+		}{
+			{`x0000-x007F x0100-x017F x2152-x217F:2  xf0000-xf0010 // don't use this`, &unicode.RangeTable{
+				R16: []unicode.Range16{
+					{0x0000, 0x007f, 1},
+					{0x0100, 0x017f, 1},
+					{0x2152, 0x217f, 2},
+				},
+				R32: []unicode.Range32{
+					{0xf0000, 0xf0010, 1},
+				},
+				LatinOffset: 1,
+			}, nil},
+		}
+
+		for i, tuple := range samples {
+			tuple.table, tuple.err = ParseUnicodeBlockList(samples[i].input)
+			So(tuple, ShouldResemble, samples[i])
+		}
+	})
+}

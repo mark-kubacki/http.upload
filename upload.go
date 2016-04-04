@@ -152,7 +152,7 @@ func (h *Handler) translateForFilesystem(scope, providedName string, config *Sco
 	if config.UnicodeForm != nil {
 		enforceForm = &config.UnicodeForm.Use
 	}
-	if !IsAcceptableFilename(uc, nil, enforceForm) {
+	if !IsAcceptableFilename(uc, config.RestrictFilenamesTo, enforceForm) {
 		err = ErrInvalidFileName
 		return
 	}

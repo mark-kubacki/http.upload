@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"unicode"
 
 	"github.com/mholt/caddy/caddy/setup"
 	"github.com/mholt/caddy/middleware"
@@ -71,6 +72,9 @@ type ScopeConfiguration struct {
 
 	// Set this to reject any filenames that are not normalized accordingly.
 	UnicodeForm *struct{ Use norm.Form }
+
+	// Limit the acceptable alphabet(s) for filenames by setting this value.
+	RestrictFilenamesTo []*unicode.RangeTable
 }
 
 // HandlerConfiguration is the result of directives found in a 'Caddyfile'.
@@ -166,6 +170,19 @@ func parseCaddyConfig(c *setup.Controller) (*HandlerConfiguration, error) {
 				default:
 					return siteConfig, c.ArgErr()
 				}
+			case "filenames_in":
+				blocks := c.RemainingArgs()
+				if len(blocks) == 0 {
+					return siteConfig, c.ArgErr()
+				}
+				v, err := ParseUnicodeBlockList(strings.Join(blocks, " "))
+				if err != nil {
+					return siteConfig, c.Err(err.Error())
+				}
+				if v == nil {
+					return siteConfig, c.ArgErr()
+				}
+				config.RestrictFilenamesTo = []*unicode.RangeTable{v}
 			}
 		}
 

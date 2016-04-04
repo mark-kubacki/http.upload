@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"testing"
+	"unicode"
 
 	"github.com/mholt/caddy/caddy/setup"
 	. "github.com/smartystreets/goconvey/convey"
@@ -173,6 +174,33 @@ func TestSetupParse(t *testing.T) {
 				},
 			},
 		},
+		{
+			`upload /test-12 {
+				to "` + scratchDir + `"
+				filenames_in u0000-u007F u0100-u017F u0391-u03C9  u2018–u203D u2152–u217F // Liceum in Europe
+			}`,
+			nil,
+			HandlerConfiguration{
+				PathScopes: []string{"/test-12"},
+				Scope: map[string]*ScopeConfiguration{
+					"/test-12": {
+						TimestampTolerance:  1 << 2,
+						WriteToPath:         scratchDir,
+						IncomingHmacSecrets: make(map[string][]byte),
+						RestrictFilenamesTo: []*unicode.RangeTable{{
+							R16: []unicode.Range16{
+								{0x0000, 0x007f, 1},
+								{0x0100, 0x017f, 1},
+								{0x0391, 0x03c9, 1},
+								{0x2018, 0x203d, 1},
+								{0x2152, 0x217f, 1},
+							},
+							LatinOffset: 1,
+						}},
+					},
+				},
+			},
+		},
 	}
 
 	Convey("Setup of the controller", t, func() {
@@ -185,6 +213,7 @@ func TestSetupParse(t *testing.T) {
 				So(err, ShouldResemble, test.expectedErr)
 			} else {
 				So(*gotConf, ShouldResemble, test.expectedConf)
+				So(err, ShouldResemble, test.expectedErr)
 			}
 		}
 	})

@@ -1,7 +1,12 @@
 package upload // import "blitznote.com/src/caddy.upload"
 
 import (
+	"errors"
+	"math"
+	"sort"
+	"strconv"
 	"strings"
+	"text/scanner"
 	"unicode"
 
 	"golang.org/x/text/unicode/norm"
@@ -14,6 +19,11 @@ const (
 	AlwaysRejectRunes = `"*:<>?|\`
 
 	runeSpatium = '\u2009'
+)
+
+// Happen when parsing ranges.
+var (
+	ErrOutOfBounds = errors.New("Value out of bounds")
 )
 
 // Not all runes in unicode.PrintRanges are suitable for filenames.
@@ -63,4 +73,114 @@ func IsAcceptableFilename(s string, reduceAcceptableRunesTo []*unicode.RangeTabl
 	}
 
 	return true
+}
+
+type tupleForRangeSlice [][3]uint64
+
+func (a tupleForRangeSlice) Len() int      { return len(a) }
+func (a tupleForRangeSlice) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
+func (a tupleForRangeSlice) Less(i, j int) bool {
+	for n := range a[i] {
+		if a[i][n] < a[j][n] {
+			return true
+		}
+		if a[i][n] > a[j][n] {
+			return false
+		}
+	}
+	return false
+}
+
+// ParseUnicodeBlock naively translates a string with Unicode blocks to Go's unicode.RangeTable.
+//
+// All elements must fit into uint32.
+// A Range must begin with its lower bound, and ranges must not overlap (we don't check this here!).
+//
+// The format is as follows, with 'stride' being set to '1' if left empty.
+//  <low>..<high>[:<stride>]
+func ParseUnicodeBlockList(str string) (*unicode.RangeTable, error) {
+	haveRanges := make(tupleForRangeSlice, 0, strings.Count(str, " "))
+
+	// read
+	var s scanner.Scanner
+	s.Init(strings.NewReader(str))
+	tok := s.Scan()
+	for tok != scanner.EOF {
+		var (
+			low, high, stride uint64
+			err               error
+		)
+
+		if tok != scanner.Ident {
+			return nil, errors.New(ErrStrUnexpectedPrefix + s.Pos().String())
+		}
+		if low, err = strconv.ParseUint(strings.TrimLeft(s.TokenText(), "uU+x"), 16, 32); err != nil {
+			return nil, errors.New(ErrStrUnexpectedPrefix + s.Pos().String())
+		}
+
+		tok = s.Scan()
+		if !(tok == '-' || tok == '–') {
+			return nil, errors.New(ErrStrUnexpectedPrefix + s.Pos().String())
+		}
+
+		tok = s.Scan()
+		if tok != scanner.Ident {
+			return nil, errors.New(ErrStrUnexpectedPrefix + s.Pos().String())
+		}
+		if high, err = strconv.ParseUint(strings.TrimLeft(s.TokenText(), "uU+x"), 16, 32); err != nil {
+			return nil, errors.New(ErrStrUnexpectedPrefix + s.Pos().String())
+		}
+
+		tok = s.Scan()
+		if tok != ':' {
+			haveRanges = append(haveRanges, [3]uint64{low, high, 1})
+			continue
+		}
+
+		tok = s.Scan()
+		if tok != scanner.Int {
+			return nil, errors.New(ErrStrUnexpectedPrefix + s.Pos().String())
+		}
+		if stride, err = strconv.ParseUint(s.TokenText(), 10, 32); err != nil {
+			return nil, errors.New(ErrStrUnexpectedPrefix + s.Pos().String())
+		}
+
+		haveRanges = append(haveRanges, [3]uint64{low, high, stride})
+
+		tok = s.Scan()
+	}
+
+	sort.Sort(haveRanges)
+
+	// fold
+	rt := unicode.RangeTable{}
+	for i := range haveRanges {
+		switch {
+		case haveRanges[i][1] <= unicode.MaxLatin1:
+			rt.LatinOffset++
+			fallthrough
+		case haveRanges[i][1] <= math.MaxUint16:
+			if rt.R16 == nil {
+				rt.R16 = []unicode.Range16{}
+			}
+			rt.R16 = append(rt.R16, unicode.Range16{
+				Lo:     uint16(haveRanges[i][0]),
+				Hi:     uint16(haveRanges[i][1]),
+				Stride: uint16(haveRanges[i][2]),
+			})
+		case haveRanges[i][1] <= math.MaxUint32:
+			if rt.R32 == nil {
+				rt.R32 = []unicode.Range32{}
+			}
+			rt.R32 = append(rt.R32, unicode.Range32{
+				Lo:     uint32(haveRanges[i][0]),
+				Hi:     uint32(haveRanges[i][1]),
+				Stride: uint32(haveRanges[i][2]),
+			})
+		default:
+			return nil, ErrOutOfBounds
+		}
+	}
+
+	return &rt, nil
 }
