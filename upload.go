@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/mholt/caddy/middleware"
+	"golang.org/x/text/unicode/norm"
 
 	"blitznote.com/src/caddy.upload/protofile"
 )
@@ -84,7 +85,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error)
 		ctype := r.Header.Get("Content-Type")
 		switch {
 		case strings.HasPrefix(ctype, "multipart/form-data"):
-			return h.ServeMultipartUpload(w, r, scope, config.WriteToPath)
+			return h.ServeMultipartUpload(w, r, scope, config)
 		case ctype != "": // other envelope formats, not implemented
 			return http.StatusUnsupportedMediaType, nil // 415: unsupported media type
 		}
@@ -93,7 +94,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error)
 		if len(r.URL.Path) < 2 {
 			return http.StatusBadRequest, nil // no filename given
 		}
-		_, retval, err := h.WriteOneHTTPBlob(scope, config.WriteToPath, r.URL.Path,
+		_, retval, err := h.WriteOneHTTPBlob(scope, config, r.URL.Path,
 			r.Header.Get("Content-Length"), r.Body)
 		return retval, err
 	}
@@ -105,7 +106,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error)
 // ServeMultipartUpload explodes one or more supplied files,
 // and feeds them to WriteOneHTTPBlob one by one.
 func (h *Handler) ServeMultipartUpload(w http.ResponseWriter, r *http.Request,
-	scope, targetPath string) (int, error) {
+	scope string, config *ScopeConfiguration) (int, error) {
 	mr, err := r.MultipartReader()
 	if err != nil {
 		return http.StatusUnsupportedMediaType, ErrCannotReadMIMEMultipart
@@ -125,7 +126,7 @@ func (h *Handler) ServeMultipartUpload(w http.ResponseWriter, r *http.Request,
 			continue
 		}
 
-		_, retval, err := h.WriteOneHTTPBlob(scope, targetPath, fileName, part.Header.Get("Content-Length"), part)
+		_, retval, err := h.WriteOneHTTPBlob(scope, config, fileName, part.Header.Get("Content-Length"), part)
 		if err != nil {
 			return retval, err
 		}
@@ -135,19 +136,23 @@ func (h *Handler) ServeMultipartUpload(w http.ResponseWriter, r *http.Request,
 }
 
 // Translates the 'scope' into a proper directory, and extracts the filename from the resulting string.
-func (h *Handler) translateForFilesystem(scope, targetPath, providedName string) (fsPath, fsFilename string, err error) {
+func (h *Handler) translateForFilesystem(scope, providedName string, config *ScopeConfiguration) (fsPath, fsFilename string, err error) {
 	// 'uc' is freely controlled by the uploader
-	uc := strings.TrimPrefix(providedName, scope)              // "/upload/mine/my.blob" → "/mine/my.blob"
-	s := filepath.Join(targetPath, strings.TrimLeft(uc, "./")) // → "/var/mine/my.blob"
+	uc := strings.TrimPrefix(providedName, scope)                      // "/upload/mine/my.blob" → "/mine/my.blob"
+	s := filepath.Join(config.WriteToPath, strings.TrimLeft(uc, "./")) // → "/var/mine/my.blob"
 
 	// stop any childish path trickery here
 	translated := filepath.Clean(s) // "/var/mine/../mine/my.blob" → "/var/mine/my.blob"
-	if !strings.HasPrefix(translated, targetPath) {
+	if !strings.HasPrefix(translated, config.WriteToPath) {
 		err = os.ErrPermission
 		return
 	}
 
-	if !IsAcceptableFilename(uc, nil, nil) {
+	var enforceForm *norm.Form
+	if config.UnicodeForm != nil {
+		enforceForm = &config.UnicodeForm.Use
+	}
+	if !IsAcceptableFilename(uc, nil, enforceForm) {
 		err = ErrInvalidFileName
 		return
 	}
@@ -159,7 +164,8 @@ func (h *Handler) translateForFilesystem(scope, targetPath, providedName string)
 
 // WriteOneHTTPBlob adapts WriteFileFromReader to HTTP conventions
 // by translating input and output values.
-func (h *Handler) WriteOneHTTPBlob(scope, targetPath, fileName, anticipatedSize string, r io.Reader) (uint64, int, error) {
+func (h *Handler) WriteOneHTTPBlob(scope string, config *ScopeConfiguration, fileName,
+	anticipatedSize string, r io.Reader) (uint64, int, error) {
 	expectBytes, _ := strconv.ParseUint(anticipatedSize, 10, 64)
 	if anticipatedSize != "" && expectBytes <= 0 { // we cannot work with that
 		return 0, http.StatusLengthRequired, nil // 411: length required
@@ -167,7 +173,7 @@ func (h *Handler) WriteOneHTTPBlob(scope, targetPath, fileName, anticipatedSize 
 		// We don't require any length; but if the key exists, the value must be valid.
 	}
 
-	path, fname, err := h.translateForFilesystem(scope, targetPath, fileName)
+	path, fname, err := h.translateForFilesystem(scope, fileName, config)
 	if err != nil {
 		return 0, 422, os.ErrPermission // 422: unprocessable entity
 	}

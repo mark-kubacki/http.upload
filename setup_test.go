@@ -7,6 +7,7 @@ import (
 
 	"github.com/mholt/caddy/caddy/setup"
 	. "github.com/smartystreets/goconvey/convey"
+	"golang.org/x/text/unicode/norm"
 )
 
 func TestSetupParse(t *testing.T) {
@@ -150,6 +151,24 @@ func TestSetupParse(t *testing.T) {
 						TimestampTolerance:  1 << 2,
 						WriteToPath:         "/",
 						IncomingHmacSecrets: make(map[string][]byte),
+					},
+				},
+			},
+		},
+		{
+			`upload /test-11 {
+				to "` + scratchDir + `"
+				filenames_form NFC
+			}`,
+			nil,
+			HandlerConfiguration{
+				PathScopes: []string{"/test-11"},
+				Scope: map[string]*ScopeConfiguration{
+					"/test-11": {
+						TimestampTolerance:  1 << 2,
+						WriteToPath:         scratchDir,
+						IncomingHmacSecrets: make(map[string][]byte),
+						UnicodeForm:         &struct{ Use norm.Form }{Use: norm.NFC},
 					},
 				},
 			},

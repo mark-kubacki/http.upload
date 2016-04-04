@@ -10,6 +10,7 @@ import (
 
 	"github.com/mholt/caddy/caddy/setup"
 	"github.com/mholt/caddy/middleware"
+	"golang.org/x/text/unicode/norm"
 )
 
 // Setup configures an UploadHander instance.
@@ -67,6 +68,9 @@ type ScopeConfiguration struct {
 
 	// The user must set a "flag of shame" for sites that don't use TLS with 'upload'. (read-only)
 	AcknowledgedNoTLS bool
+
+	// Set this to reject any filenames that are not normalized accordingly.
+	UnicodeForm *struct{ Use norm.Form }
 }
 
 // HandlerConfiguration is the result of directives found in a 'Caddyfile'.
@@ -148,6 +152,20 @@ func parseCaddyConfig(c *setup.Controller) (*HandlerConfiguration, error) {
 				config.SilenceAuthErrors = true
 			case "yes_without_tls":
 				config.AcknowledgedNoTLS = true
+			case "filenames_form":
+				if !c.NextArg() {
+					return siteConfig, c.ArgErr()
+				}
+				switch c.Val() {
+				case "NFC":
+					config.UnicodeForm = &struct{ Use norm.Form }{Use: norm.NFC}
+				case "NFD":
+					config.UnicodeForm = &struct{ Use norm.Form }{Use: norm.NFD}
+				case "none":
+					// nop
+				default:
+					return siteConfig, c.ArgErr()
+				}
 			}
 		}
 
