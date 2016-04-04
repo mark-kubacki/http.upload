@@ -308,11 +308,7 @@ func TestUpload_ServeHTTP(t *testing.T) {
 			}()
 
 			code, _ = h.ServeHTTP(w, req)
-			if runtime.GOOS == "windows" {
-				So(code, ShouldBeIn, 409, 500)
-			} else {
-				So(code, ShouldEqual, 409) // 409: conflict
-			}
+			So(code, ShouldBeIn, 409, 500)
 		})
 
 		Convey("name clashes between filename and new directory", func() {
