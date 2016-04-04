@@ -29,6 +29,7 @@ script:
   - diff <(echo -n) <(gofmt -s -d .)
   - ineffassign .
   - go vet ./...
+  - go test -v ./...
   - go test -covermode=count -coverprofile=profile.cov ./.
 
 after_script:

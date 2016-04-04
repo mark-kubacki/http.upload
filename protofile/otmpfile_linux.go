@@ -23,7 +23,11 @@ func intentNewUnix(path, filename string) (*ProtoFileBehaver, error) {
 	t, err := os.OpenFile(path, os.O_WRONLY|unix.O_TMPFILE, 0600)
 	// did it fail because…
 	if err != nil {
-		switch err {
+		perr, ok := err.(*os.PathError)
+		if !ok {
+			return nil, err
+		}
+		switch perr.Err {
 		case syscall.EISDIR, syscall.ENOENT: // … kernel does not know O_TMPFILE
 			// If so, don't try it again.
 			IntentNew = intentNewUnixDotted
