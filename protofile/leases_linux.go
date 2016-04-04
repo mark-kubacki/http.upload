@@ -30,7 +30,7 @@ func intentNewUnixDotted(path, filename string) (*ProtoFileBehaver, error) {
 	}
 	g := (*orig).(generalizedProtoFile)
 
-	_, err = fcntl(g.File.Fd(), syscall.F_SETLEASE, syscall.F_WRLCK) // WRLCK includes RDLCK
+	fcntl(g.File.Fd(), syscall.F_SETLEASE, syscall.F_WRLCK) // WRLCK includes RDLCK
 	// An error is not expected because we created that file, with a random name;
 	// - either the kernel does not support locking at all and the error can be ignored anyway
 	// - or anything malevolent is locking our file.
