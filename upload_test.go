@@ -345,4 +345,88 @@ func TestUpload_ServeHTTP(t *testing.T) {
 			}
 		})
 	})
+
+	Convey("COPY, MOVE, and DELETE are supported", t, func() {
+		h := newTestUploadHander(t, trivialConfig)
+		w := httptest.NewRecorder()
+
+		SkipConvey("COPY duplicates a file", func() {
+			tempFName, copyFName := tempFileName(), tempFileName()
+			req, _ := http.NewRequest("PUT", "/"+tempFName, strings.NewReader("DELME"))
+			defer func() {
+				os.Remove(filepath.Join(scratchDir, tempFName))
+			}()
+
+			code, _ := h.ServeHTTP(w, req)
+			if code != 200 {
+				So(code, ShouldEqual, 200)
+				return
+			}
+
+			// COPY
+			req, _ = http.NewRequest("COPY", "/"+tempFName, strings.NewReader(""))
+			req.Header.Set("Destination", "/"+copyFName)
+			defer func() {
+				os.Remove(filepath.Join(scratchDir, copyFName))
+			}()
+
+			code, _ = h.ServeHTTP(w, req)
+			So(code, ShouldEqual, 200)
+
+			_, err := os.Stat(filepath.Join(scratchDir, copyFName))
+			So(os.IsNotExist(err), ShouldBeFalse)
+		})
+
+		Convey("MOVE renames a file", func() {
+			tempFName, copyFName := tempFileName(), tempFileName()
+			req, _ := http.NewRequest("PUT", "/"+tempFName, strings.NewReader("DELME"))
+			defer func() {
+				os.Remove(filepath.Join(scratchDir, tempFName))
+			}()
+
+			code, _ := h.ServeHTTP(w, req)
+			if code != 200 {
+				So(code, ShouldEqual, 200)
+				return
+			}
+
+			// MOVE
+			req, _ = http.NewRequest("MOVE", "/"+tempFName, strings.NewReader(""))
+			req.Header.Set("Destination", "/"+copyFName)
+			defer func() {
+				os.Remove(filepath.Join(scratchDir, copyFName))
+			}()
+
+			code, _ = h.ServeHTTP(w, req)
+			So(code, ShouldEqual, 200)
+
+			_, err := os.Stat(filepath.Join(scratchDir, tempFName))
+			So(os.IsNotExist(err), ShouldBeTrue)
+			_, err = os.Stat(filepath.Join(scratchDir, copyFName))
+			So(os.IsNotExist(err), ShouldBeFalse)
+		})
+
+		Convey("DELETE removes a file", func() {
+			tempFName := tempFileName()
+			req, _ := http.NewRequest("PUT", "/"+tempFName, strings.NewReader("DELME"))
+			defer func() {
+				os.Remove(filepath.Join(scratchDir, tempFName))
+			}()
+
+			code, _ := h.ServeHTTP(w, req)
+			if code != 200 {
+				So(code, ShouldEqual, 200)
+				return
+			}
+
+			// DELETE
+			req, _ = http.NewRequest("DELETE", "/"+tempFName, strings.NewReader(""))
+
+			code, _ = h.ServeHTTP(w, req)
+			So(code, ShouldEqual, 200)
+
+			_, err := os.Stat(filepath.Join(scratchDir, tempFName))
+			So(os.IsNotExist(err), ShouldBeTrue)
+		})
+	})
 }

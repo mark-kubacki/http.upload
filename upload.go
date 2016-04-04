@@ -51,7 +51,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error)
 	)
 
 	switch r.Method {
-	case "POST", "PUT":
+	case "POST", "PUT", "COPY", "MOVE", "DELETE":
 		// iterate the scopes in the order they have been defined
 		for idx := range h.Config.PathScopes {
 			if middleware.Path(r.URL.Path).Matches(h.Config.PathScopes[idx]) {
@@ -81,6 +81,19 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error)
 	}
 
 	switch r.Method {
+	case "COPY":
+		return http.StatusNotImplemented, nil
+	case "MOVE":
+		destName := r.Header.Get("Destination")
+		if len(r.URL.Path) < 2 || destName == "" {
+			return http.StatusBadRequest, nil
+		}
+		return h.MoveOneFile(scope, config, r.URL.Path, destName)
+	case "DELETE":
+		if len(r.URL.Path) < 2 {
+			return http.StatusBadRequest, nil
+		}
+		return h.DeleteOneFile(scope, config, r.URL.Path)
 	case "POST":
 		ctype := r.Header.Get("Content-Type")
 		switch {
@@ -92,7 +105,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error)
 		fallthrough
 	case "PUT":
 		if len(r.URL.Path) < 2 {
-			return http.StatusBadRequest, nil // no filename given
+			return http.StatusBadRequest, nil
 		}
 		_, retval, err := h.WriteOneHTTPBlob(scope, config, r.URL.Path,
 			r.Header.Get("Content-Length"), r.Body)
@@ -160,6 +173,55 @@ func (h *Handler) translateForFilesystem(scope, providedName string, config *Sco
 	fsPath, fsFilename = filepath.Dir(translated), filepath.Base(translated)
 
 	return
+}
+
+// MoveOneFile renames a file or path.
+//
+// The destination filename is parsed as if it were an URL.Path.
+func (h *Handler) MoveOneFile(scope string, config *ScopeConfiguration,
+	fromFilename, toFilename string) (int, error) {
+	frompath, fromname, err := h.translateForFilesystem(scope, fromFilename, config)
+	if err != nil {
+		return 422, os.ErrPermission
+	}
+	topath, toname, err := h.translateForFilesystem(scope, toFilename, config)
+	if err != nil {
+		return 422, os.ErrPermission
+	}
+
+	if fromname == toname && frompath == topath {
+		return http.StatusConflict, nil
+	}
+
+	err = os.Rename(filepath.Join(frompath, fromname), filepath.Join(topath, toname))
+	if err == nil {
+		return http.StatusOK, nil
+	}
+	if strings.HasSuffix(err.Error(), "directory not empty") {
+		return http.StatusConflict, nil
+	}
+	return http.StatusInternalServerError, nil
+}
+
+// DeleteOneFile deletes from disk.
+//
+// Returns 200 (StatusOK) if the file did not exist ex ante.
+func (h *Handler) DeleteOneFile(scope string, config *ScopeConfiguration, fileName string) (int, error) {
+	path, fname, err := h.translateForFilesystem(scope, fileName, config)
+	if err != nil {
+		return 422, os.ErrPermission // 422: unprocessable entity
+	}
+
+	// no "os.Stat(); os.IsExist()" here: we don't check for 412 (Precondition Failed)
+
+	err = os.RemoveAll(filepath.Join(path, fname))
+	switch err {
+	case nil:
+		return http.StatusOK, nil
+	case os.ErrPermission:
+		return http.StatusForbidden, nil
+	}
+	return http.StatusInternalServerError, nil
 }
 
 // WriteOneHTTPBlob adapts WriteFileFromReader to HTTP conventions
