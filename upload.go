@@ -195,7 +195,7 @@ func (h *Handler) MoveOneFile(scope string, config *ScopeConfiguration,
 
 	err = os.Rename(filepath.Join(frompath, fromname), filepath.Join(topath, toname))
 	if err == nil {
-		return http.StatusOK, nil
+		return http.StatusCreated, nil // 201, but if something gets overwritten 204
 	}
 	if strings.HasSuffix(err.Error(), "directory not empty") {
 		return http.StatusConflict, nil
@@ -217,7 +217,7 @@ func (h *Handler) DeleteOneFile(scope string, config *ScopeConfiguration, fileNa
 	err = os.RemoveAll(filepath.Join(path, fname))
 	switch err {
 	case nil:
-		return http.StatusOK, nil
+		return http.StatusNoContent, nil // 204
 	case os.ErrPermission:
 		return http.StatusForbidden, nil
 	}

@@ -367,7 +367,7 @@ func TestUpload_ServeHTTP(t *testing.T) {
 			}()
 
 			code, _ = h.ServeHTTP(w, req)
-			So(code, ShouldEqual, 200)
+			So(code, ShouldEqual, 201)
 
 			_, err := os.Stat(filepath.Join(scratchDir, copyFName))
 			So(os.IsNotExist(err), ShouldBeFalse)
@@ -394,7 +394,7 @@ func TestUpload_ServeHTTP(t *testing.T) {
 			}()
 
 			code, _ = h.ServeHTTP(w, req)
-			So(code, ShouldEqual, 200)
+			So(code, ShouldEqual, 201)
 
 			_, err := os.Stat(filepath.Join(scratchDir, tempFName))
 			So(os.IsNotExist(err), ShouldBeTrue)
@@ -419,7 +419,7 @@ func TestUpload_ServeHTTP(t *testing.T) {
 			req, _ = http.NewRequest("DELETE", "/"+tempFName, strings.NewReader(""))
 
 			code, _ = h.ServeHTTP(w, req)
-			So(code, ShouldEqual, 200)
+			So(code, ShouldEqual, 204)
 
 			_, err := os.Stat(filepath.Join(scratchDir, tempFName))
 			So(os.IsNotExist(err), ShouldBeTrue)
