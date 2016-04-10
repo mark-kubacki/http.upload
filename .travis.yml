@@ -19,7 +19,6 @@ install:
   - go get -d -t blitznote.com/src/caddy.upload
   - go get github.com/mattn/goveralls
   - go get golang.org/x/tools/cmd/cover
-  - go get golang.org/x/tools/cmd/vet
   - go get github.com/gordonklaus/ineffassign
 
 before_script:
