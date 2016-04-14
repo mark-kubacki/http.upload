@@ -13,6 +13,9 @@ func init() {
 	IntentNew = intentNewUnix
 }
 
+// unixProtoFile is the variant that utilizes O_TMPFILE.
+// Although it might seem that data is written to the parent directory itself,
+// it actually goes into a nameless file.
 type unixProtoFile ProtoFile
 
 func intentNewUnix(path, filename string) (*ProtoFileBehaver, error) {
@@ -50,6 +53,10 @@ func (p unixProtoFile) Zap() error {
 	return p.File.Close()
 }
 
+// Persist gives the file a name.
+//
+// Nameless files can be identified using tuple (PID, FD) and named
+// by linking the FD to a name in the filesystem where it had been opened.
 func (p unixProtoFile) Persist() error {
 	err := p.File.Sync()
 	if err != nil {
@@ -58,17 +65,18 @@ func (p unixProtoFile) Persist() error {
 
 	fd := p.File.Fd()
 	oldpath := "/proc/self/fd/" + uitoa(uint(fd)) // always ≥0 (often ≥4)
-	// As of Go 1.5 it is not possible to call Linkat with a FD only.
-	// The first parameter is not AT_FDCWD: ignored with {'oldpath',AT_SYMLINK_FOLLOW}, else needed
+	// As of Go 1.6 it is not possible to call Linkat with a FD only.
+	// Therefore we must be tricky with those parameters:
 	err = linkat(fd, oldpath, unix.AT_FDCWD, p.finalName, unix.AT_SYMLINK_FOLLOW)
-	if os.IsExist(err) {
+	if os.IsExist(err) { // Someone claimed or name!
 		finfo, err2 := os.Stat(p.finalName)
 		if err2 == nil && !finfo.IsDir() {
-			os.Remove(p.finalName)
-			err = linkat(fd, oldpath, unix.AT_FDCWD, p.finalName, unix.AT_SYMLINK_FOLLOW) // try again
+			os.Remove(p.finalName) // Similar to creat() we will "overwrite" it.
+			err = linkat(fd, oldpath, unix.AT_FDCWD, p.finalName, unix.AT_SYMLINK_FOLLOW)
 		}
 	}
 	// 'linkat' catches many of the errors 'os.Create' would throw.
+	// Only at a later point in a file's lifecycle.
 	if err != nil {
 		return err
 	}
@@ -85,6 +93,7 @@ func (p unixProtoFile) SizeWillBe(numBytes uint64) error {
 	if numBytes <= maxInt64 {
 		return syscall.Fallocate(fd, 0, 0, int64(numBytes))
 	}
+	// Yes, every Exbibyte counts.
 	err := syscall.Fallocate(fd, 0, 0, maxInt64)
 	if err != nil {
 		return err

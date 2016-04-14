@@ -35,7 +35,7 @@ func (p generalizedProtoFile) Persist() error {
 
 // Asks the filesystem to reserve some space for this file's contents.
 // This could result in a sparse file (if you wrote less than anticipated)
-// or shrink the file.
+// or truncate it.
 func (p generalizedProtoFile) SizeWillBe(numBytes uint64) error {
 	if numBytes <= reserveFileSizeThreshold {
 		return nil

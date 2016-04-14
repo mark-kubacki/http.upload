@@ -14,7 +14,7 @@ import (
 //go:noescape
 func use(p unsafe.Pointer)
 
-// Use this to avoid importing "fmt".
+// Here to avoid importing "fmt".
 func uitoa(val uint) string {
 	var buf [32]byte // big enough for int64
 	i := len(buf) - 1
@@ -27,6 +27,7 @@ func uitoa(val uint) string {
 	return string(buf[i:])
 }
 
+// linkat from stdlib, because the latter does not export it with all its parameters.
 func linkat(olddirfd uintptr, oldpath string, newdirfd int, newpath string, flags int) (err error) {
 	var _p0 *byte
 	_p0, err = syscall.BytePtrFromString(oldpath)
@@ -47,6 +48,9 @@ func linkat(olddirfd uintptr, oldpath string, newdirfd int, newpath string, flag
 	return
 }
 
+// fcntl was not available at the the this package has been written.
+//
+// It is used here for filesystem leases, not locks.
 func fcntl(fd uintptr, cmd int, arg int) (val int, err error) {
 	r0, _, e1 := syscall.Syscall(syscall.SYS_FCNTL, fd, uintptr(cmd), uintptr(arg))
 	val = int(r0)

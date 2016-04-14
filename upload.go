@@ -20,13 +20,14 @@ const (
 	reportProgressEveryBytes = 1 << 15
 )
 
+// Errors used in functions that resemble the core logic of this plugin.
 var (
 	ErrCannotReadMIMEMultipart = errors.New("Error reading MIME multipart")
 	ErrFileNameConflict        = errors.New("Name-Name Conflict")
 	ErrInvalidFileName         = errors.New("Invalid filename") // includes the path
 )
 
-// Handler represents a configured instance of this plugin.
+// Handler represents a configured instance of this plugin for uploads.
 //
 // If you want to use it outside of Caddy, then implement 'Next' as
 // something with method ServeHTTP and at least the same member variables
@@ -36,14 +37,8 @@ type Handler struct {
 	Config HandlerConfiguration
 }
 
-// ServeHTTP is a gateway to ServeMultipartUpload and WriteOneHTTPBlob on uploads, else a passthrough.
-//
-// POST
-// is used with
-//  curl -F bashrc=@.bashrc <url>
-// PUT
-// when you use
-//  curl -T <filename> <url>
+// ServeHTTP catches methods if meant for file manipulation, else is a passthrough.
+// Directs HTTP methods and fields to the corresponding function calls.
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error) {
 	var (
 		scope  string // a prefix we will need to replace with the target directory
@@ -116,8 +111,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error)
 	return h.Next.ServeHTTP(w, r)
 }
 
-// ServeMultipartUpload explodes one or more supplied files,
-// and feeds them to WriteOneHTTPBlob one by one.
+// ServeMultipartUpload is used on HTTP POST to explode a MIME Multipart envelope
+// into one or more supplied files. They are then supplied to WriteOneHTTPBlob one by one.
 func (h *Handler) ServeMultipartUpload(w http.ResponseWriter, r *http.Request,
 	scope string, config *ScopeConfiguration) (int, error) {
 	mr, err := r.MultipartReader()
@@ -175,7 +170,7 @@ func (h *Handler) translateForFilesystem(scope, providedName string, config *Sco
 	return
 }
 
-// MoveOneFile renames a file or path.
+// MoveOneFile corresponds to HTTP method MOVE, and renames a file or path.
 //
 // The destination filename is parsed as if it were an URL.Path.
 func (h *Handler) MoveOneFile(scope string, config *ScopeConfiguration,
@@ -203,7 +198,8 @@ func (h *Handler) MoveOneFile(scope string, config *ScopeConfiguration,
 	return http.StatusInternalServerError, nil
 }
 
-// DeleteOneFile deletes from disk.
+// DeleteOneFile deletes from disk like "rm -r" and is used with HTTP DELETE.
+// The term 'file' includes directories.
 //
 // Returns 200 (StatusOK) if the file did not exist ex ante.
 func (h *Handler) DeleteOneFile(scope string, config *ScopeConfiguration, fileName string) (int, error) {
@@ -224,8 +220,8 @@ func (h *Handler) DeleteOneFile(scope string, config *ScopeConfiguration, fileNa
 	return http.StatusInternalServerError, nil
 }
 
-// WriteOneHTTPBlob adapts WriteFileFromReader to HTTP conventions
-// by translating input and output values.
+// WriteOneHTTPBlob handles HTTP PUT (and HTTP POST without envelopes),
+// writes one file to disk by adapting WriteFileFromReader to HTTP conventions.
 func (h *Handler) WriteOneHTTPBlob(scope string, config *ScopeConfiguration, fileName,
 	anticipatedSize string, r io.Reader) (uint64, int, error) {
 	expectBytes, _ := strconv.ParseUint(anticipatedSize, 10, 64)

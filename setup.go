@@ -49,28 +49,32 @@ pass:
 	}, nil
 }
 
-// ScopeConfiguration represents the settings for a scope (path).
+// ScopeConfiguration represents the settings of a scope (URL path).
 type ScopeConfiguration struct {
 	// How big a difference between 'now' and the provided timestamp do we tolerate?
 	// In seconds. Due to possible optimizations this should be an order of 2.
 	// A reasonable default is 1<<2.
 	TimestampTolerance uint64
 
-	// the upload destination
+	// Target directory on disk that serves as upload destination.
 	WriteToPath string
 
-	// Already decoded. Request verification is disabled if this is empty.
+	// Maps KeyIDs to shared secrets.
+	// Here the latter are already decoded from base64 to binary.
+	// Request verification is disabled if this is empty.
 	IncomingHmacSecrets     map[string][]byte
 	IncomingHmacSecretsLock sync.RWMutex
 
-	// A skilled attacked will monitor traffic, and timings.
-	// Enabling this merely obscures the path.
+	// If false, this plugin returns HTTP Errors.
+	// If true, passes the given request to the next middleware
+	// which could respond with an Error of its own, poorly obscuring where this plugin is used.
 	SilenceAuthErrors bool
 
 	// The user must set a "flag of shame" for sites that don't use TLS with 'upload'. (read-only)
+	// This keeps track of whether said flags has been set.
 	AcknowledgedNoTLS bool
 
-	// Set this to reject any filenames that are not normalized accordingly.
+	// Set this to reject any non-conforming filenames.
 	UnicodeForm *struct{ Use norm.Form }
 
 	// Limit the acceptable alphabet(s) for filenames by setting this value.
@@ -86,10 +90,10 @@ type HandlerConfiguration struct {
 	// Order matters because scopes can overlap.
 	PathScopes []string
 
-	// every scope (path) can be configured differently
+	// Maps scopes (paths) to their own and potentially differently configurations.
 	Scope map[string]*ScopeConfiguration
 
-	// Used on initialization to effect a reminder to the user to use TLS on sites with 'upload'.
+	// Set on initialization. If false, the user will get a friendly reminder to use TLS with this plugin.
 	siteHasTLS bool
 }
 
@@ -198,10 +202,11 @@ func parseCaddyConfig(c *setup.Controller) (*HandlerConfiguration, error) {
 	return siteConfig, nil
 }
 
-// AddHmacSecrets decodes the arguments and adds/updates them to the existing HMAC shared secrets.
+// AddHmacSecrets decodes the some key/value pairs
+// and adds/updates them into the existing HMAC shared secret collection.
 //
-// The format of each element is:
-//  key=(base64(value))
+// The format of each pair is:
+//  key=base64(value)
 //
 // For example:
 //  hmac-key-1=yql3kIDweM8KYm+9pHzX0PKNskYAU46Jb5D6nLftTvo=

@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	// Runes that are not safe to use with network shares.
+	// AlwaysRejectRunes contains runes that are not safe to use with network shares.
 	//
 	// Please note that '/' is already discarded at an earlier stage.
 	AlwaysRejectRunes = `"*:<>?|\`
@@ -91,13 +91,13 @@ func (a tupleForRangeSlice) Less(i, j int) bool {
 	return false
 }
 
-// ParseUnicodeBlock naively translates a string with Unicode blocks to Go's unicode.RangeTable.
+// ParseUnicodeBlockList naïvely translates a string with space-delimited Unicode ranges to Go's unicode.RangeTable.
 //
 // All elements must fit into uint32.
 // A Range must begin with its lower bound, and ranges must not overlap (we don't check this here!).
 //
-// The format is as follows, with 'stride' being set to '1' if left empty.
-//  <low>..<high>[:<stride>]
+// The format of one range is as follows, with 'stride' being set to '1' if left empty.
+//  <low>-<high>[:<stride>]
 func ParseUnicodeBlockList(str string) (*unicode.RangeTable, error) {
 	haveRanges := make(tupleForRangeSlice, 0, strings.Count(str, " "))
 

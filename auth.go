@@ -6,6 +6,7 @@ import (
 	"time"
 )
 
+// Errors thrown by the implementation of the Authorization: Signature scheme.
 var (
 	ErrAuthAlgorithm         = errors.New("Authorization: unsupported 'algorithm'")
 	ErrAuthHeaderFieldPrefix = errors.New("Authorization: mismatch in prefix of 'headers'")

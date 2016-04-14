@@ -7,27 +7,33 @@ import (
 )
 
 const (
-	// If a file is expected to be smaller than this (in bytes) won't seek
-	// to EOF for writing a single byte, which would've "announced" the final size.
+	// If a file is expected to be smaller than this (in bytes)
+	// then skip reserving space for it in advance.
 	reserveFileSizeThreshold = 1 << 15
 
-	// needed for file allocations
+	// Defined here to avoid the import of "math", and needed in file allocation functions.
 	maxInt64 = 1<<63 - 1
 )
 
+// ProtoFileBehaver is implemented by all variants of ProtoFile.
+//
+// Use this in pointers to any ProtoFile you want to utilize.
 type ProtoFileBehaver interface {
-	// Discards a file that has not yet been persisted.
+	// Discards a file that has not yet been persisted/closed, else a NOP.
 	Zap() error
 
 	// Emerges the file under the initially given name into observable namespace on disk.
+	// This closes the file.
 	Persist() error
 
-	// Reserves space on disk for the file contents.
+	// Reserves space on disk by writelessly inflating the (then empty) file.
 	SizeWillBe(numBytes uint64) error
 
 	io.Writer
 }
 
+// ProtoFile represents a file that can be discarded or named after having been written.
+// (With normal files such an committment is made ex ante, on creation.)
 type ProtoFile struct {
 	*os.File
 
@@ -35,11 +41,7 @@ type ProtoFile struct {
 	finalName string
 }
 
-// Calls to 'IntentNew' result in a sink for writes to disk
-// which can be emerged into a regular file by calling member function 'Persist'.
-//
-// Depending on operation- and filesystem a degraded implementation of ProtoFile
-// will be used.
+// IntentNew "creates" a file which, ideally, is nameless at that point.
 var IntentNew func(path, filename string) (*ProtoFileBehaver, error) = intentNewUniversal
 
 type generalizedProtoFile ProtoFile

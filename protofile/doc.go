@@ -1,15 +1,15 @@
-// Package protofile resulted from the need to postpone emerging of a file into
-// observable namespace: It has to be written first.
+// Package protofile implements temporary files that don't appear in
+// filesystem namespace until closed.
 //
-// This alters its lifecycle from {CreateNew, Write, Close}
-// resulting in {IntentNew, Write, Persist or Zap}.
-// A file "appears" only after having been persisted.
-//
-// Due to limitations of operating- and filesystems that happens in most cases,
-// not all:
+// Unfortunately this only works on most, not all, Linux systems.
 // For example, ancient Linux versions don't know flag O_TMPFILE.
-// A graceful degradiation is attempted in such cases, eventually resulting in
-// the well-known dot-files (like ".gitignore").
+// In such and similar cases a graceful degradiation is attempted,
+// which worst-case results in the well-known dot-files (like ".gitignore").
+//
+// Unlike with traditional files with {CreateNew, Write, Close},
+// these have a lifecycle described by {IntentNew, Write, Persist or Zap}.
+// While a traditional file "emerges" the instant it is created with a name,
+// "proto files" are named only after having been "persisted" (which closes them).
 //
 // Streaming of file contents is currently not supported.
 package protofile // import "blitznote.com/src/caddy.upload/protofile"

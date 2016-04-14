@@ -11,14 +11,16 @@ import (
 	"text/scanner"
 	"time"
 
-	. "plugin.hosting/go/abs"
+	"plugin.hosting/go/abs"
 )
 
+// Used in errors that are returned when parsing a malformed "Authorization" header.
 const (
 	ErrStrUnexpectedPrefix      = "unexpected token at position: "
 	ErrStrUnexpectedValuePrefix = "unexpected value (not in quotes?) at position: "
 )
 
+// Returned when parsing a malformed "Authorization" header.
 var (
 	ErrAuthorizationNotSupported = errors.New("authorization challenge not supported")
 )
@@ -119,7 +121,7 @@ func (a *AuthorizationHeader) CheckFormal(headers http.Header, timestampNow, tim
 				timestampThen = uint64(t.Unix())
 			}
 
-			if Abs64(int64(timestampNow-timestampThen)) > timeTolerance {
+			if abs.Abs64(int64(timestampNow-timestampThen)) > timeTolerance {
 				return false
 			}
 		}
@@ -128,7 +130,9 @@ func (a *AuthorizationHeader) CheckFormal(headers http.Header, timestampNow, tim
 	return true
 }
 
-// SatisfiedBy tests if the headers and shared secret result in the same signature that has been set.
+// SatisfiedBy tests if the headers and shared secret result in the same signature as given in the header.
+//
+// As this is a rather costly function, call 'CheckFormal' first to avoid 'SatisfiedBy' where possible.
 func (a *AuthorizationHeader) SatisfiedBy(headers http.Header, secret []byte) bool {
 	mac := hmac.New(sha256.New, secret)
 	for idx := range a.HeadersToSign {

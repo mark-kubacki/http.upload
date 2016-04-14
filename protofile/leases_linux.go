@@ -8,7 +8,7 @@ import (
 )
 
 // Is used with Linux if O_TMPFILE didn't work.
-// Utilizes Linux facilities that prevent tampering with its contents.
+// Utilizes Linux facilities that prevent tampering with file-contents.
 type unixDottedProtoFile struct {
 	generalizedProtoFile
 }
@@ -20,9 +20,9 @@ type unixDottedProtoFile struct {
 // killing our process.
 
 // Utilizes the kernel's file locking mechanisms.
-// A different process watching file's (creation) events would ideally
-// 'open' with O_NONBLOCK and notice the mistake by getting a EWOULDBLOCK
-// due to the lease.
+// A different process watching file (creation) events would ideally
+// 'open' with O_NONBLOCK and notice its mistake (if it opened it prematuerly)
+// by getting a EWOULDBLOCK due to the lease.
 func intentNewUnixDotted(path, filename string) (*ProtoFileBehaver, error) {
 	orig, err := intentNewUniversal(path, filename)
 	if err != nil {
