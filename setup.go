@@ -59,6 +59,11 @@ type ScopeConfiguration struct {
 	// Target directory on disk that serves as upload destination.
 	WriteToPath string
 
+	// UploadProgressCallback is called every so often
+	// to report the total bytes written to a single file and the current error,
+	// including 'io.EOF'.
+	UploadProgressCallback func(uint64, error)
+
 	// Maps KeyIDs to shared secrets.
 	// Here the latter are already decoded from base64 to binary.
 	// Request verification is disabled if this is empty.
@@ -108,6 +113,7 @@ func parseCaddyConfig(c *setup.Controller) (*HandlerConfiguration, error) {
 		config := ScopeConfiguration{}
 		config.TimestampTolerance = 1 << 2
 		config.IncomingHmacSecrets = make(map[string][]byte)
+		config.UploadProgressCallback = noopUploadProgressCallback
 
 		scopes := c.RemainingArgs() // most likely only one path; but could be more
 		if len(scopes) == 0 {
@@ -229,4 +235,9 @@ func (c *ScopeConfiguration) AddHmacSecrets(tuples []string) (err error) {
 	}
 
 	return
+}
+
+// noopUploadProgressCallback NOP-functor, set as default.
+func noopUploadProgressCallback(bytesWritten uint64, err error) {
+	// I want to become a closure that updates a data structure.
 }

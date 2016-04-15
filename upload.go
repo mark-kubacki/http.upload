@@ -236,7 +236,11 @@ func (h *Handler) WriteOneHTTPBlob(scope string, config *ScopeConfiguration, fil
 		return 0, 422, os.ErrPermission // 422: unprocessable entity
 	}
 
-	bytesWritten, err := WriteFileFromReader(path, fname, r, expectBytes, noopUploadProgressCallback)
+	callback := config.UploadProgressCallback
+	if callback == nil {
+		callback = noopUploadProgressCallback
+	}
+	bytesWritten, err := WriteFileFromReader(path, fname, r, expectBytes, callback)
 	if err != nil {
 		if os.IsExist(err) || // gets thrown on a double race condition when using O_TMPFILE and linkat
 			strings.HasSuffix(err.Error(), "not a directory") {
@@ -254,10 +258,6 @@ func (h *Handler) WriteOneHTTPBlob(scope string, config *ScopeConfiguration, fil
 	return bytesWritten, 200, nil // 200: all dope
 }
 
-func noopUploadProgressCallback(bytesWritten uint64, err error) {
-	// I want to become a closure that updates a data structure.
-}
-
 // WriteFileFromReader implements an unit of work consisting of
 // • creation of a temporary file,
 // • writing to it,
@@ -267,9 +267,8 @@ func noopUploadProgressCallback(bytesWritten uint64, err error) {
 // If 'anticipatedSize' ≥ protofile.reserveFileSizeThreshold (usually 32 KiB)
 // then disk space will be reserved before writing (by a ProtoFileBehaver).
 //
-// uploadProgressCallback is called every so often with the number of bytes
-// read for the file, and any errors that might have occured.
-// "error" remaining 'io.EOF' after all bytes have been read indicates success.
+// With uploadProgressCallback:
+// The file has been successfully written if "error" remains 'io.EOF'.
 func WriteFileFromReader(path, filename string, r io.Reader, anticipatedSize uint64,
 	uploadProgressCallback func(uint64, error)) (uint64, error) {
 	wp, err := protofile.IntentNew(path, filename)

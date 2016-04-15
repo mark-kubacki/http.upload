@@ -209,6 +209,11 @@ func TestSetupParse(t *testing.T) {
 			c := setup.NewTestController(test.config)
 			gotConf, err := parseCaddyConfig(c)
 
+			// strip functors (cannot compare them)
+			for _, scopeConf := range gotConf.Scope {
+				scopeConf.UploadProgressCallback = nil
+			}
+
 			if test.expectedErr != nil {
 				So(err, ShouldResemble, test.expectedErr)
 			} else {
