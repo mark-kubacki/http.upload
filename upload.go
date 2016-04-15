@@ -179,16 +179,23 @@ func (h *Handler) MoveOneFile(scope string, config *ScopeConfiguration,
 	if err != nil {
 		return 422, os.ErrPermission
 	}
+	moveFrom := filepath.Join(frompath, fromname)
 	topath, toname, err := h.translateForFilesystem(scope, toFilename, config)
 	if err != nil {
 		return 422, os.ErrPermission
 	}
+	moveTo := filepath.Join(topath, toname)
 
-	if fromname == toname && frompath == topath {
+	// Do not check for Unicode equivalence here:
+	// The requestor might want to change forms!
+	if moveFrom == moveTo {
 		return http.StatusConflict, nil
 	}
+	if moveFrom == config.WriteToPath || moveTo == config.WriteToPath {
+		return http.StatusForbidden, nil // refuse any tinkering with the scope's target directory
+	}
 
-	err = os.Rename(filepath.Join(frompath, fromname), filepath.Join(topath, toname))
+	err = os.Rename(moveFrom, moveTo)
 	if err == nil {
 		return http.StatusCreated, nil // 201, but if something gets overwritten 204
 	}
@@ -207,10 +214,15 @@ func (h *Handler) DeleteOneFile(scope string, config *ScopeConfiguration, fileNa
 	if err != nil {
 		return 422, os.ErrPermission // 422: unprocessable entity
 	}
+	deleteThis := filepath.Join(path, fname)
 
 	// no "os.Stat(); os.IsExist()" here: we don't check for 412 (Precondition Failed)
 
-	err = os.RemoveAll(filepath.Join(path, fname))
+	if deleteThis == config.WriteToPath {
+		return http.StatusForbidden, nil // refuse to delete the scope's target directory
+	}
+
+	err = os.RemoveAll(deleteThis)
 	switch err {
 	case nil:
 		return http.StatusNoContent, nil // 204

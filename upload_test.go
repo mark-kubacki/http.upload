@@ -27,7 +27,10 @@ func init() {
 	scratchDir = os.TempDir()
 
 	// don't pull in package 'fmt' for this
-	trivialConfig = `upload / {
+	trivialConfig = `upload /subdir {
+		to "` + scratchDir + `"
+	}
+	upload / {
 		to "` + scratchDir + `"
 	}`
 }
@@ -423,6 +426,16 @@ func TestUpload_ServeHTTP(t *testing.T) {
 
 			_, err := os.Stat(filepath.Join(scratchDir, tempFName))
 			So(os.IsNotExist(err), ShouldBeTrue)
+		})
+
+		Convey("DELETE will not remove the target directory", func() {
+			req, _ := http.NewRequest("DELETE", "/subdir", strings.NewReader(""))
+
+			code, _ := h.ServeHTTP(w, req)
+			So(code, ShouldEqual, 403)
+
+			_, err := os.Stat(scratchDir)
+			So(os.IsNotExist(err), ShouldBeFalse)
 		})
 	})
 }

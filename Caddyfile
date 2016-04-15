@@ -1,5 +1,8 @@
 0.0.0.0
 
-upload / {
+upload /web/path {
 	to "/var/tmp"
+	yes_without_tls
 }
+browse
+root /var/tmp
