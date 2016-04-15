@@ -118,7 +118,7 @@ curl \
 # HTTP POST
 curl \
   -F gitconfig=@.gitconfig \
-  -F keys/${USER}/id_ed25519.pub@.ssh/id_ed25519.pub \
+  -F id_ed25519.pub=@.ssh/id_ed25519.pub \
   https://127.0.0.1/web/path/
 ```
 
