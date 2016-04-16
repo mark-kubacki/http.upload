@@ -83,7 +83,7 @@ func TestUpload_ServeHTTP(t *testing.T) {
 	Convey("GET is a no-op", t, func() {
 		h := newTestUploadHander(t, trivialConfig)
 		w := httptest.NewRecorder()
-		req, err := http.NewRequest("GET", "/stuff", strings.NewReader(""))
+		req, err := http.NewRequest("GET", "/stuff", nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -363,7 +363,7 @@ func TestUpload_ServeHTTP(t *testing.T) {
 			}
 
 			// COPY
-			req, _ = http.NewRequest("COPY", "/"+tempFName, strings.NewReader(""))
+			req, _ = http.NewRequest("COPY", "/"+tempFName, nil)
 			req.Header.Set("Destination", "/"+copyFName)
 			defer func() {
 				os.Remove(filepath.Join(scratchDir, copyFName))
@@ -390,7 +390,7 @@ func TestUpload_ServeHTTP(t *testing.T) {
 			}
 
 			// MOVE
-			req, _ = http.NewRequest("MOVE", "/"+tempFName, strings.NewReader(""))
+			req, _ = http.NewRequest("MOVE", "/"+tempFName, nil)
 			req.Header.Set("Destination", "/"+copyFName)
 			defer func() {
 				os.Remove(filepath.Join(scratchDir, copyFName))
@@ -419,7 +419,7 @@ func TestUpload_ServeHTTP(t *testing.T) {
 			}
 
 			// DELETE
-			req, _ = http.NewRequest("DELETE", "/"+tempFName, strings.NewReader(""))
+			req, _ = http.NewRequest("DELETE", "/"+tempFName, nil)
 
 			code, _ = h.ServeHTTP(w, req)
 			So(code, ShouldEqual, 204)
@@ -429,7 +429,7 @@ func TestUpload_ServeHTTP(t *testing.T) {
 		})
 
 		Convey("DELETE will not remove the target directory", func() {
-			req, _ := http.NewRequest("DELETE", "/subdir", strings.NewReader(""))
+			req, _ := http.NewRequest("DELETE", "/subdir", nil)
 
 			code, _ := h.ServeHTTP(w, req)
 			So(code, ShouldEqual, 403)

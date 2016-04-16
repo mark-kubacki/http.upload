@@ -55,10 +55,6 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error)
 				break
 			}
 		}
-	default:
-		// Reads are not our responsibility.
-		// Worst case the requestor gets a 404, 405, or 410.
-		return h.Next.ServeHTTP(w, r)
 	}
 	if scope == "" {
 		return h.Next.ServeHTTP(w, r)

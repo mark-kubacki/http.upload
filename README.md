@@ -138,8 +138,8 @@ curl -X DELETE \
 Authorization: Signature
 ------------------------
 
-Although this plugin comes with support for request authorization using scheme **Signature**,
-the only supported *algorithm* is **hmac-sha256** and there are no *realms*.
+This plugin comes with support for request authorization scheme **Signature**,
+but does not support its *realms* or any other *algorithm* than **hmac-sha256**.
 
 A pre-shared secret, referenced by **keyId**,
 is used together with a nonce—the concatenation of the current Unix time and a free-form string—
