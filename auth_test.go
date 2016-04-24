@@ -54,7 +54,7 @@ func TestUploadAuthentication(t *testing.T) {
 			code, err := h.ServeHTTP(w, req)
 			So(err, ShouldNotBeNil)
 			if err != nil {
-				So(err.Error(), ShouldEqual, ErrAuthorizationNotSupported.Error())
+				So(err.Error(), ShouldEqual, errAuthorizationNotSupported.Error())
 			}
 			So(code, ShouldEqual, 401)
 			So(w.Header().Get("WWW-Authenticate"), ShouldEqual, "Signature")

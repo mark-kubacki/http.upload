@@ -8,10 +8,10 @@ import (
 
 // Errors thrown by the implementation of the Authorization: Signature scheme.
 var (
-	ErrAuthAlgorithm         = errors.New("Authorization: unsupported 'algorithm'")
-	ErrAuthHeaderFieldPrefix = errors.New("Authorization: mismatch in prefix of 'headers'")
-	ErrAuthHeadersLacking    = errors.New("Authorization: not all expected headers had been set correctly")
-	ErrMethodUnauthorized    = errors.New("Method Not Authorized")
+	errAuthAlgorithm         = errors.New("Authorization: unsupported 'algorithm'")
+	errAuthHeaderFieldPrefix = errors.New("Authorization: mismatch in prefix of 'headers'")
+	errAuthHeadersLacking    = errors.New("Authorization: not all expected headers had been set correctly")
+	errMethodUnauthorized    = errors.New("Method not authorized")
 )
 
 // Results in a syscall issued by 'runtime'.
@@ -42,7 +42,7 @@ func (h *Handler) authenticate(r *http.Request, config *ScopeConfiguration) (htt
 
 	err = a.Parse(r.Header.Get("Authorization"))
 	switch err {
-	case ErrAuthorizationNotSupported: // or the header is empty/not set
+	case errAuthorizationNotSupported: // or the header is empty/not set
 		return http.StatusUnauthorized, err
 	case nil:
 		break
@@ -52,15 +52,15 @@ func (h *Handler) authenticate(r *http.Request, config *ScopeConfiguration) (htt
 
 	if len(a.Signature) == 0 || len(a.HeadersToSign) < 2 ||
 		a.Algorithm != "hmac-sha256" {
-		return http.StatusBadRequest, ErrAuthAlgorithm
+		return http.StatusBadRequest, errAuthAlgorithm
 	}
 	if !(a.HeadersToSign[0] == "date" || a.HeadersToSign[0] == "timestamp") ||
 		a.HeadersToSign[1] != "token" {
-		return http.StatusBadRequest, ErrAuthHeaderFieldPrefix
+		return http.StatusBadRequest, errAuthHeaderFieldPrefix
 	}
 
 	if !a.CheckFormal(r.Header, getTimestamp(), config.TimestampTolerance) {
-		return http.StatusBadRequest, ErrAuthHeadersLacking
+		return http.StatusBadRequest, errAuthHeadersLacking
 	}
 
 	config.IncomingHmacSecretsLock.RLock()
@@ -71,7 +71,7 @@ func (h *Handler) authenticate(r *http.Request, config *ScopeConfiguration) (htt
 	isSatisfied := a.SatisfiedBy(r.Header, hmacSharedSecret)
 
 	if !secretFound || !isSatisfied {
-		return http.StatusForbidden, ErrMethodUnauthorized // 403: forbidden
+		return http.StatusForbidden, errMethodUnauthorized
 	}
 	return
 }

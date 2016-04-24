@@ -19,11 +19,13 @@ const (
 	AlwaysRejectRunes = `"*:<>?|\`
 
 	runeSpatium = '\u2009'
+
+	errStrUnexpectedRange = "Unexpected Unicode range: "
 )
 
 // Happen when parsing ranges.
 var (
-	ErrOutOfBounds = errors.New("Value out of bounds")
+	errOutOfBounds = errors.New("Value out of bounds")
 )
 
 // Not all runes in unicode.PrintRanges are suitable for filenames.
@@ -112,23 +114,23 @@ func ParseUnicodeBlockList(str string) (*unicode.RangeTable, error) {
 		)
 
 		if tok != scanner.Ident {
-			return nil, errors.New(ErrStrUnexpectedPrefix + s.Pos().String())
+			return nil, errors.New(errStrUnexpectedRange + s.Pos().String())
 		}
 		if low, err = strconv.ParseUint(strings.TrimLeft(s.TokenText(), "uU+x"), 16, 32); err != nil {
-			return nil, errors.New(ErrStrUnexpectedPrefix + s.Pos().String())
+			return nil, errors.New(errStrUnexpectedRange + s.Pos().String())
 		}
 
 		tok = s.Scan()
 		if !(tok == '-' || tok == '–') {
-			return nil, errors.New(ErrStrUnexpectedPrefix + s.Pos().String())
+			return nil, errors.New(errStrUnexpectedRange + s.Pos().String())
 		}
 
 		tok = s.Scan()
 		if tok != scanner.Ident {
-			return nil, errors.New(ErrStrUnexpectedPrefix + s.Pos().String())
+			return nil, errors.New(errStrUnexpectedRange + s.Pos().String())
 		}
 		if high, err = strconv.ParseUint(strings.TrimLeft(s.TokenText(), "uU+x"), 16, 32); err != nil {
-			return nil, errors.New(ErrStrUnexpectedPrefix + s.Pos().String())
+			return nil, errors.New(errStrUnexpectedRange + s.Pos().String())
 		}
 
 		tok = s.Scan()
@@ -139,10 +141,10 @@ func ParseUnicodeBlockList(str string) (*unicode.RangeTable, error) {
 
 		tok = s.Scan()
 		if tok != scanner.Int {
-			return nil, errors.New(ErrStrUnexpectedPrefix + s.Pos().String())
+			return nil, errors.New(errStrUnexpectedRange + s.Pos().String())
 		}
 		if stride, err = strconv.ParseUint(s.TokenText(), 10, 32); err != nil {
-			return nil, errors.New(ErrStrUnexpectedPrefix + s.Pos().String())
+			return nil, errors.New(errStrUnexpectedRange + s.Pos().String())
 		}
 
 		haveRanges = append(haveRanges, [3]uint64{low, high, stride})
@@ -178,7 +180,7 @@ func ParseUnicodeBlockList(str string) (*unicode.RangeTable, error) {
 				Stride: uint32(haveRanges[i][2]),
 			})
 		default:
-			return nil, ErrOutOfBounds
+			return nil, errOutOfBounds
 		}
 	}
 

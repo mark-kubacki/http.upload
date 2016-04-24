@@ -22,9 +22,9 @@ const (
 
 // Errors used in functions that resemble the core logic of this plugin.
 var (
-	ErrCannotReadMIMEMultipart = errors.New("Error reading MIME multipart")
-	ErrFileNameConflict        = errors.New("Name-Name Conflict")
-	ErrInvalidFileName         = errors.New("Invalid filename") // includes the path
+	errCannotReadMIMEMultipart = errors.New("Error reading MIME multipart payload")
+	errFileNameConflict        = errors.New("Name-Name Conflict")
+	errInvalidFileName         = errors.New("Invalid filename and/or path")
 )
 
 // Handler represents a configured instance of this plugin for uploads.
@@ -113,7 +113,7 @@ func (h *Handler) ServeMultipartUpload(w http.ResponseWriter, r *http.Request,
 	scope string, config *ScopeConfiguration) (int, error) {
 	mr, err := r.MultipartReader()
 	if err != nil {
-		return http.StatusUnsupportedMediaType, ErrCannotReadMIMEMultipart
+		return http.StatusUnsupportedMediaType, errCannotReadMIMEMultipart
 	}
 
 	for {
@@ -157,7 +157,7 @@ func (h *Handler) translateForFilesystem(scope, providedName string, config *Sco
 		enforceForm = &config.UnicodeForm.Use
 	}
 	if !IsAcceptableFilename(uc, config.RestrictFilenamesTo, enforceForm) {
-		err = ErrInvalidFileName
+		err = errInvalidFileName
 		return
 	}
 
@@ -252,7 +252,7 @@ func (h *Handler) WriteOneHTTPBlob(scope string, config *ScopeConfiguration, fil
 	if err != nil {
 		if os.IsExist(err) || // gets thrown on a double race condition when using O_TMPFILE and linkat
 			strings.HasSuffix(err.Error(), "not a directory") {
-			return 0, http.StatusConflict, ErrFileNameConflict // 409
+			return 0, http.StatusConflict, errFileNameConflict // 409
 		}
 		if bytesWritten > 0 && bytesWritten < expectBytes {
 			return bytesWritten, 507, err // 507: insufficient storage

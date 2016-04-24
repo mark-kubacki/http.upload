@@ -16,13 +16,13 @@ import (
 
 // Used in errors that are returned when parsing a malformed "Authorization" header.
 const (
-	ErrStrUnexpectedPrefix      = "unexpected token at position: "
-	ErrStrUnexpectedValuePrefix = "unexpected value (not in quotes?) at position: "
+	errStrUnexpectedPrefix      = "Unexpected token at position: "
+	errStrUnexpectedValuePrefix = "Unexpected value (not in quotes?) at position: "
 )
 
 // Returned when parsing a malformed "Authorization" header.
 var (
-	ErrAuthorizationNotSupported = errors.New("authorization challenge not supported")
+	errAuthorizationNotSupported = errors.New("Authorization challenge not supported")
 )
 
 // AuthorizationHeader represents a HTTP header which is used in
@@ -49,29 +49,29 @@ func parseAuthorizationHeader(src string, a AuthorizationHeader) (AuthorizationH
 	s.Init(strings.NewReader(src))
 	tok := s.Scan()
 	if tok == scanner.EOF || s.TokenText() != "Signature" {
-		return a, ErrAuthorizationNotSupported
+		return a, errAuthorizationNotSupported
 	}
 
 	for tok != scanner.EOF {
 		tok = s.Scan()
 		if tok != scanner.Ident {
-			return a, errors.New(ErrStrUnexpectedPrefix + s.Pos().String())
+			return a, errors.New(errStrUnexpectedPrefix + s.Pos().String())
 		}
 		ident := strings.ToLower(s.TokenText())
 
 		tok = s.Scan()
 		if !(tok == 61 || tok == 58) { // = or :
-			return a, errors.New(ErrStrUnexpectedPrefix + s.Pos().String())
+			return a, errors.New(errStrUnexpectedPrefix + s.Pos().String())
 		}
 
 		tok = s.Scan()
 		if tok != scanner.String {
-			return a, errors.New(ErrStrUnexpectedPrefix + s.Pos().String())
+			return a, errors.New(errStrUnexpectedPrefix + s.Pos().String())
 		}
 
 		v, err := strconv.Unquote(s.TokenText())
 		if err != nil {
-			return a, errors.New(ErrStrUnexpectedValuePrefix + s.Pos().String())
+			return a, errors.New(errStrUnexpectedValuePrefix + s.Pos().String())
 		}
 
 		switch ident {
