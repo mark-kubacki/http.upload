@@ -6,6 +6,10 @@ go:
   - 1.6
   - tip
 
+matrix:
+  allow_failures:
+    - go: tip
+
 env:
   - CGO_ENABLED=0
 
