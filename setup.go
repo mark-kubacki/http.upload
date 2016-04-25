@@ -1,14 +1,13 @@
 package upload // import "blitznote.com/src/caddy.upload"
 
 import (
-	"encoding/base64"
-	"errors"
 	"os"
 	"strconv"
 	"strings"
 	"sync"
 	"unicode"
 
+	"blitznote.com/src/caddy.upload/signature.auth"
 	"github.com/mholt/caddy/caddy/setup"
 	"github.com/mholt/caddy/middleware"
 	"golang.org/x/text/unicode/norm"
@@ -67,7 +66,7 @@ type ScopeConfiguration struct {
 	// Maps KeyIDs to shared secrets.
 	// Here the latter are already decoded from base64 to binary.
 	// Request verification is disabled if this is empty.
-	IncomingHmacSecrets     map[string][]byte
+	IncomingHmacSecrets     auth.HmacSecrets
 	IncomingHmacSecretsLock sync.RWMutex
 
 	// If false, this plugin returns HTTP Errors.
@@ -112,7 +111,7 @@ func parseCaddyConfig(c *setup.Controller) (*HandlerConfiguration, error) {
 	for c.Next() {
 		config := ScopeConfiguration{}
 		config.TimestampTolerance = 1 << 2
-		config.IncomingHmacSecrets = make(map[string][]byte)
+		config.IncomingHmacSecrets = make(auth.HmacSecrets)
 		config.UploadProgressCallback = noopUploadProgressCallback
 
 		scopes := c.RemainingArgs() // most likely only one path; but could be more
@@ -143,7 +142,7 @@ func parseCaddyConfig(c *setup.Controller) (*HandlerConfiguration, error) {
 				if len(keys) == 0 {
 					return siteConfig, c.ArgErr()
 				}
-				err := config.AddHmacSecrets(keys)
+				err := config.IncomingHmacSecrets.Insert(keys)
 				if err != nil {
 					return siteConfig, c.Err(err.Error())
 				}
@@ -206,35 +205,6 @@ func parseCaddyConfig(c *setup.Controller) (*HandlerConfiguration, error) {
 	}
 
 	return siteConfig, nil
-}
-
-// AddHmacSecrets decodes the some key/value pairs
-// and adds/updates them into the existing HMAC shared secret collection.
-//
-// The format of each pair is:
-//  key=base64(value)
-//
-// For example:
-//  hmac-key-1=yql3kIDweM8KYm+9pHzX0PKNskYAU46Jb5D6nLftTvo=
-//
-// The first tuple that cannot be decoded is returned as error string.
-func (c *ScopeConfiguration) AddHmacSecrets(tuples []string) (err error) {
-	c.IncomingHmacSecretsLock.Lock()
-	defer c.IncomingHmacSecretsLock.Unlock()
-
-	for idx := range tuples {
-		p := strings.SplitN(tuples[idx], "=", 2)
-		if len(p) != 2 {
-			return errors.New(tuples[idx])
-		}
-		binary, err := base64.StdEncoding.DecodeString(p[1])
-		if err != nil {
-			return errors.New(tuples[idx])
-		}
-		c.IncomingHmacSecrets[p[0]] = binary
-	}
-
-	return
 }
 
 // noopUploadProgressCallback NOP-functor, set as default.

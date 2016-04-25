@@ -1,4 +1,4 @@
-package upload // import "blitznote.com/src/caddy.upload"
+package auth // import "blitznote.com/src/caddy.upload/signature.auth"
 
 import (
 	"crypto/hmac"
@@ -103,7 +103,7 @@ func parseAuthorizationHeader(src string, a AuthorizationHeader) (AuthorizationH
 
 // CheckFormal returns true if all listed headers are present
 // and timestamp(s) (if provided) are within a tolerance.
-func (a *AuthorizationHeader) CheckFormal(headers http.Header, timestampNow, timeTolerance uint64) bool {
+func (a *AuthorizationHeader) CheckFormal(headers http.Header, timestampRecv, timeTolerance uint64) bool {
 	for idx := range a.HeadersToSign {
 		v := headers.Get(a.HeadersToSign[idx])
 		if v == "" {
@@ -121,7 +121,7 @@ func (a *AuthorizationHeader) CheckFormal(headers http.Header, timestampNow, tim
 				timestampThen = uint64(t.Unix())
 			}
 
-			if abs.Abs64(int64(timestampNow-timestampThen)) > timeTolerance {
+			if abs.Abs64(int64(timestampRecv-timestampThen)) > timeTolerance {
 				return false
 			}
 		}

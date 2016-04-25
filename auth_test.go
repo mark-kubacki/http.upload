@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	. "github.com/smartystreets/goconvey/convey"
 )
@@ -53,9 +54,6 @@ func TestUploadAuthentication(t *testing.T) {
 
 			code, err := h.ServeHTTP(w, req)
 			So(err, ShouldNotBeNil)
-			if err != nil {
-				So(err.Error(), ShouldEqual, errAuthorizationNotSupported.Error())
-			}
 			So(code, ShouldEqual, 401)
 			So(w.Header().Get("WWW-Authenticate"), ShouldEqual, "Signature")
 		})
@@ -70,7 +68,7 @@ func TestUploadAuthentication(t *testing.T) {
 			defer func() {
 				os.Remove(filepath.Join(scratchDir, tempFName))
 			}()
-			ts := strconv.FormatUint(getTimestampUsingTime(), 10)
+			ts := strconv.FormatInt(time.Now().Unix(), 10)
 			req.Header.Set("Timestamp", ts)
 			req.Header.Set("Token", "ABC")
 			req.Header.Set("Authorization", fmt.Sprintf(`Signature keyId="%s",signature="%s"`,

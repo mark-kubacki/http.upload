@@ -1,10 +1,12 @@
-package upload // import "blitznote.com/src/caddy.upload"
+package auth // import "blitznote.com/src/caddy.upload/signature.auth"
 
 import (
 	"encoding/base64"
 	"net/http"
 	"strconv"
+	"strings"
 	"testing"
+	"time"
 
 	. "github.com/smartystreets/goconvey/convey"
 )
@@ -25,6 +27,13 @@ func TestAuthHeaderSerialization(t *testing.T) {
 				HeadersToSign: []string{"timestamp", "token"},
 				Signature:     []byte("Mark")},
 		},
+		{`Signature keyId="(key=id)", algorithm="hmac-sha256",  extensions="a b",
+			headers="date token",signature="TWFyaw=="`,
+			AuthorizationHeader{KeyID: "(key=id)", Algorithm: "hmac-sha256",
+				HeadersToSign: []string{"date", "token"},
+				Signature:     []byte("Mark"),
+				Extensions:    []string{"a", "b"}},
+		},
 	}
 
 	Convey("Authorization header conversion", t, func() {
@@ -35,6 +44,26 @@ func TestAuthHeaderSerialization(t *testing.T) {
 				So(fresh.KeyID[0], ShouldNotEqual, '"')
 				So(err, ShouldBeNil)
 				So(fresh, ShouldResemble, row.deserialized)
+			}
+		})
+
+		Convey("yields the expected errors on invalid input", func() {
+			for _, row := range valid {
+				var fresh AuthorizationHeader
+				err := fresh.Parse(strings.Replace(row.serialized, "Signature ", "Digest ", 1))
+				So(err, ShouldNotBeNil)
+
+				err = fresh.Parse(strings.Replace(row.serialized, "Signature ", "Signature 3", 1))
+				So(err, ShouldNotBeNil)
+
+				err = fresh.Parse(strings.Replace(row.serialized, "keyId=", "keyId→", 1))
+				So(err, ShouldNotBeNil)
+
+				err = fresh.Parse(strings.Replace(row.serialized, `"(key=id)"`, "#1", 1))
+				So(err, ShouldNotBeNil)
+
+				err = fresh.Parse(strings.Replace(row.serialized, `TWFyaw==`, `TWFyaw=`, 1))
+				So(err, ShouldNotBeNil)
 			}
 		})
 	})
@@ -100,7 +129,15 @@ func TestAuthHeaderChecks(t *testing.T) {
 				hdr["Token"] = []string{row.token}
 
 				So(a.CheckFormal(hdr, valid[0].timestamp+3, 1<<1), ShouldBeFalse) // +3 here
-				So(a.SatisfiedBy(hdr, []byte(row.key)), ShouldBeTrue)
+
+				hdr.Del("Timestamp")
+				a.HeadersToSign = []string{"date", "token"}
+				d := time.Unix(int64(row.timestamp)+10, 0)
+				hdr["Date"] = []string{d.Format(http.TimeFormat)}
+				So(a.CheckFormal(hdr, valid[0].timestamp+3, 1<<1), ShouldBeFalse) // +3 here
+
+				hdr["Date"] = []string{"ca " + d.Format(http.TimeFormat)}
+				So(a.CheckFormal(hdr, valid[0].timestamp, 1<<1), ShouldBeFalse)
 			}
 		})
 		Convey("doesn't pass if A is over-specified", func() {
@@ -112,7 +149,6 @@ func TestAuthHeaderChecks(t *testing.T) {
 				hdr["Token"] = []string{row.token}
 
 				So(a.CheckFormal(hdr, valid[0].timestamp, 1<<1), ShouldBeFalse)
-				So(a.SatisfiedBy(hdr, []byte(row.key)), ShouldBeFalse)
 			}
 		})
 	})

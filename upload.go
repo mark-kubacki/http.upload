@@ -8,11 +8,12 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-
-	"github.com/mholt/caddy/middleware"
-	"golang.org/x/text/unicode/norm"
+	"time"
 
 	"blitznote.com/src/caddy.upload/protofile"
+	"blitznote.com/src/caddy.upload/signature.auth"
+	"github.com/mholt/caddy/middleware"
+	"golang.org/x/text/unicode/norm"
 )
 
 const (
@@ -37,6 +38,14 @@ type Handler struct {
 	Config HandlerConfiguration
 }
 
+// getTimestamp returns the current time as unix timestamp.
+//
+// Do not inline this one: Mark overwrites it for his flavour of Go.
+var getTimestamp = func(r *http.Request) uint64 {
+	t := time.Now().Unix()
+	return uint64(t)
+}
+
 // ServeHTTP catches methods if meant for file manipulation, else is a passthrough.
 // Directs HTTP methods and fields to the corresponding function calls.
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error) {
@@ -47,7 +56,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error)
 
 	switch r.Method {
 	case "POST", "PUT", "COPY", "MOVE", "DELETE":
-		// iterate the scopes in the order they have been defined
+		// iterate over the scopes in the order they have been defined
 		for idx := range h.Config.PathScopes {
 			if middleware.Path(r.URL.Path).Matches(h.Config.PathScopes[idx]) {
 				scope = h.Config.PathScopes[idx]
@@ -60,16 +69,21 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error)
 		return h.Next.ServeHTTP(w, r)
 	}
 
-	if resp, err := h.authenticate(r, config); err != nil {
-		if config.SilenceAuthErrors {
-			return h.Next.ServeHTTP(w, r)
+	config.IncomingHmacSecretsLock.RLock()
+	if len(config.IncomingHmacSecrets) > 0 {
+		if resp, err := auth.Authenticate(r.Header, config.IncomingHmacSecrets, getTimestamp(r), config.TimestampTolerance); err != nil {
+			config.IncomingHmacSecretsLock.RUnlock()
+			if config.SilenceAuthErrors {
+				return h.Next.ServeHTTP(w, r)
+			}
+			if resp == 401 {
+				// send this header to prevent the user from being asked for a username/password pair
+				w.Header().Set("WWW-Authenticate", "Signature")
+			}
+			return resp, err
 		}
-		if resp == 401 {
-			// send this header to prevent the user from being asked for a username/password pair
-			w.Header().Set("WWW-Authenticate", "Signature")
-		}
-		return resp, err
 	}
+	config.IncomingHmacSecretsLock.RUnlock()
 
 	switch r.Method {
 	case "COPY":
