@@ -207,6 +207,10 @@ upload /binhost/gentoo {
 	filenames_in u0000–u007F
 	timestamp_tolerance 0
 }
+tls {
+  …
+  clientcas /etc/ssl/dist-uploaders-CA.crt
+}
 ```
 
 … while someone in East Asia would share space on his blog with three friends:
