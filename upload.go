@@ -55,19 +55,17 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error)
 	)
 
 	switch r.Method {
-	case "POST", "PUT", "COPY", "MOVE", "DELETE":
+	case http.MethodPost, http.MethodPut, "COPY", "MOVE", "DELETE":
 		// iterate over the scopes in the order they have been defined
-		for idx := range h.Config.PathScopes {
-			if middleware.Path(r.URL.Path).Matches(h.Config.PathScopes[idx]) {
-				scope = h.Config.PathScopes[idx]
+		for _, scope = range h.Config.PathScopes {
+			if middleware.Path(r.URL.Path).Matches(scope) {
 				config = h.Config.Scope[scope]
-				break
+				goto inScope
 			}
 		}
 	}
-	if scope == "" {
-		return h.Next.ServeHTTP(w, r)
-	}
+	return h.Next.ServeHTTP(w, r)
+inScope:
 
 	config.IncomingHmacSecretsLock.RLock()
 	if len(config.IncomingHmacSecrets) > 0 {
@@ -99,7 +97,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error)
 			return http.StatusBadRequest, nil
 		}
 		return h.DeleteOneFile(scope, config, r.URL.Path)
-	case "POST":
+	case http.MethodPost:
 		ctype := r.Header.Get("Content-Type")
 		switch {
 		case strings.HasPrefix(ctype, "multipart/form-data"):
@@ -108,7 +106,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error)
 			return http.StatusUnsupportedMediaType, nil // 415: unsupported media type
 		}
 		fallthrough
-	case "PUT":
+	case http.MethodPut:
 		if len(r.URL.Path) < 2 {
 			return http.StatusBadRequest, nil
 		}
