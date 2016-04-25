@@ -14,8 +14,8 @@ func TestAuthorization(t *testing.T) {
 		var now uint64 = 1458508452
 
 		// no users, but auth is active
-		code, err := Authenticate(h, users, now, now)
-		So(code, ShouldEqual, http.StatusForbidden)
+		err := Authenticate(h, users, now, now)
+		So(err.SuggestedResponseCode(), ShouldEqual, http.StatusForbidden)
 		So(err, ShouldNotBeNil)
 
 		// now with users
@@ -24,46 +24,45 @@ func TestAuthorization(t *testing.T) {
 		users.Insert([]string{"yui=3==="})
 
 		// missing header
-		code, err = Authenticate(h, users, now, now)
-		So(code, ShouldEqual, http.StatusUnauthorized)
+		err = Authenticate(h, users, now, now)
+		So(err.SuggestedResponseCode(), ShouldEqual, http.StatusUnauthorized)
 		So(err, ShouldNotBeNil)
 
 		// feed a malformed one
 		h.Add("Authorization", "Signature")
-		code, err = Authenticate(h, users, now, now)
-		So(code, ShouldEqual, http.StatusBadRequest)
+		err = Authenticate(h, users, now, now)
+		So(err.SuggestedResponseCode(), ShouldEqual, http.StatusBadRequest)
 		So(err, ShouldNotBeNil)
 
 		// a valid request
 		h.Set("Authorization", `Signature keyId="yui",algorithm="hmac-sha256",headers="timestamp token",signature="yql3kIDweM8KYm+9pHzX0PKNskYAU46Jb5D6nLftTvo="`)
 		h.Set("Timestamp", "1458508452")
 		h.Set("Token", "streng")
-		code, err = Authenticate(h, users, now, 0)
-		So(code, ShouldEqual, http.StatusOK)
+		err = Authenticate(h, users, now, 0)
 		So(err, ShouldBeNil)
 
 		// replay, must fail
-		code, err = Authenticate(h, users, now+5, 1<<2)
-		So(code, ShouldEqual, http.StatusBadRequest)
+		err = Authenticate(h, users, now+5, 1<<2)
+		So(err.SuggestedResponseCode(), ShouldEqual, http.StatusForbidden)
 		So(err, ShouldNotBeNil)
 
 		// signature mismatch
 		h.Set("Token", "streng++")
-		code, err = Authenticate(h, users, now, 0)
-		So(code, ShouldEqual, http.StatusForbidden)
+		err = Authenticate(h, users, now, 0)
+		So(err.SuggestedResponseCode(), ShouldEqual, http.StatusForbidden)
 		So(err, ShouldNotBeNil)
 		h.Set("Token", "streng")
 
 		// wrong order
 		h.Set("Authorization", `Signature keyId="yui",headers="token timestamp",signature="yql3kIDweM8KYm+9pHzX0PKNskYAU46Jb5D6nLftTvo="`)
-		code, err = Authenticate(h, users, now, 0)
-		So(code, ShouldEqual, http.StatusBadRequest)
+		err = Authenticate(h, users, now, 0)
+		So(err.SuggestedResponseCode(), ShouldEqual, http.StatusUnauthorized)
 		So(err, ShouldNotBeNil)
 
 		// algorithm mismatch
 		h.Set("Authorization", `Signature keyId="yui",algorithm="hmac-sha512",signature="yql3kIDweM8KYm+9pHzX0PKNskYAU46Jb5D6nLftTvo="`)
-		code, err = Authenticate(h, users, now, 0)
-		So(code, ShouldEqual, http.StatusBadRequest)
+		err = Authenticate(h, users, now, 0)
+		So(err.SuggestedResponseCode(), ShouldEqual, http.StatusUnauthorized)
 		So(err, ShouldNotBeNil)
 	})
 }

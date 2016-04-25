@@ -69,12 +69,14 @@ inScope:
 
 	config.IncomingHmacSecretsLock.RLock()
 	if len(config.IncomingHmacSecrets) > 0 {
-		if resp, err := auth.Authenticate(r.Header, config.IncomingHmacSecrets, getTimestamp(r), config.TimestampTolerance); err != nil {
+		if err := auth.Authenticate(r.Header, config.IncomingHmacSecrets, getTimestamp(r), config.TimestampTolerance); err != nil {
 			config.IncomingHmacSecretsLock.RUnlock()
+
 			if config.SilenceAuthErrors {
 				return h.Next.ServeHTTP(w, r)
 			}
-			if resp == 401 {
+			resp := err.SuggestedResponseCode()
+			if resp == http.StatusUnauthorized {
 				// send this header to prevent the user from being asked for a username/password pair
 				w.Header().Set("WWW-Authenticate", "Signature")
 			}
@@ -185,12 +187,12 @@ func (h *Handler) MoveOneFile(scope string, config *ScopeConfiguration,
 	fromFilename, toFilename string) (int, error) {
 	frompath, fromname, err := h.translateForFilesystem(scope, fromFilename, config)
 	if err != nil {
-		return 422, os.ErrPermission
+		return 422, err
 	}
 	moveFrom := filepath.Join(frompath, fromname)
 	topath, toname, err := h.translateForFilesystem(scope, toFilename, config)
 	if err != nil {
-		return 422, os.ErrPermission
+		return 422, err
 	}
 	moveTo := filepath.Join(topath, toname)
 

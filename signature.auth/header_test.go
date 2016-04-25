@@ -100,7 +100,7 @@ func TestAuthHeaderChecks(t *testing.T) {
 				hdr["Timestamp"] = []string{strconv.FormatUint(row.timestamp, 10)}
 				hdr["Token"] = []string{row.token}
 
-				So(a.CheckFormal(hdr, valid[0].timestamp, 1<<1), ShouldBeTrue)
+				So(a.CheckFormal(hdr, valid[0].timestamp, 1<<1), ShouldBeNil)
 				So(a.SatisfiedBy(hdr, []byte(row.key)), ShouldBeTrue)
 			}
 		})
@@ -113,7 +113,7 @@ func TestAuthHeaderChecks(t *testing.T) {
 				hdr["Timestamp"] = []string{strconv.FormatUint(row.timestamp, 10)}
 				hdr["Token"] = []string{row.token}
 
-				So(a.CheckFormal(hdr, row.timestamp, 1<<1), ShouldBeTrue)
+				So(a.CheckFormal(hdr, row.timestamp, 1<<1), ShouldBeNil)
 				So(a.SatisfiedBy(hdr, []byte(row.key)), ShouldBeFalse)
 			}
 		})
@@ -128,16 +128,16 @@ func TestAuthHeaderChecks(t *testing.T) {
 				hdr["Timestamp"] = []string{strconv.FormatUint(row.timestamp, 10)}
 				hdr["Token"] = []string{row.token}
 
-				So(a.CheckFormal(hdr, valid[0].timestamp+3, 1<<1), ShouldBeFalse) // +3 here
+				So(a.CheckFormal(hdr, valid[0].timestamp+3, 1<<1), ShouldNotBeNil) // +3 here
 
 				hdr.Del("Timestamp")
 				a.HeadersToSign = []string{"date", "token"}
 				d := time.Unix(int64(row.timestamp)+10, 0)
 				hdr["Date"] = []string{d.Format(http.TimeFormat)}
-				So(a.CheckFormal(hdr, valid[0].timestamp+3, 1<<1), ShouldBeFalse) // +3 here
+				So(a.CheckFormal(hdr, valid[0].timestamp+3, 1<<1), ShouldNotBeNil) // +3 here
 
 				hdr["Date"] = []string{"ca " + d.Format(http.TimeFormat)}
-				So(a.CheckFormal(hdr, valid[0].timestamp, 1<<1), ShouldBeFalse)
+				So(a.CheckFormal(hdr, valid[0].timestamp, 1<<1), ShouldNotBeNil)
 			}
 		})
 		Convey("doesn't pass if A is over-specified", func() {
@@ -148,7 +148,7 @@ func TestAuthHeaderChecks(t *testing.T) {
 				// timestamp is intentionally missing
 				hdr["Token"] = []string{row.token}
 
-				So(a.CheckFormal(hdr, valid[0].timestamp, 1<<1), ShouldBeFalse)
+				So(a.CheckFormal(hdr, valid[0].timestamp, 1<<1), ShouldNotBeNil)
 			}
 		})
 	})
