@@ -278,9 +278,8 @@ func TestUpload_ServeHTTP(t *testing.T) {
 				os.Remove(filepath.Join(scratchDir, tempFName))
 			}()
 
-			code, err := h.ServeHTTP(w, req)
+			code, _ := h.ServeHTTP(w, req)
 			So(code, ShouldEqual, 415)
-			So(err, ShouldBeNil)
 		})
 	})
 

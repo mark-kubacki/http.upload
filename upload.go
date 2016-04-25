@@ -1,7 +1,6 @@
 package upload // import "blitznote.com/src/caddy.upload"
 
 import (
-	"errors"
 	"io"
 	"log"
 	"net/http"
@@ -14,6 +13,7 @@ import (
 	"blitznote.com/src/caddy.upload/protofile"
 	"blitznote.com/src/caddy.upload/signature.auth"
 	"github.com/mholt/caddy/middleware"
+	"github.com/pkg/errors"
 	"golang.org/x/text/unicode/norm"
 )
 
@@ -23,11 +23,21 @@ const (
 )
 
 // Errors used in functions that resemble the core logic of this plugin.
-var (
-	errCannotReadMIMEMultipart = errors.New("Error reading MIME multipart payload")
-	errFileNameConflict        = errors.New("Name-Name Conflict")
-	errInvalidFileName         = errors.New("Invalid filename and/or path")
+const (
+	errCannotReadMIMEMultipart coreUploadError = "Error reading MIME multipart payload"
+	errFileNameConflict        coreUploadError = "Name-Name Conflict"
+	errInvalidFileName         coreUploadError = "Invalid filename and/or path"
+	errNoDestination           coreUploadError = "A destination is missing"
+	errUnknownEnvelopeFormat   coreUploadError = "Unknown envelope format"
+	errLengthInvalid           coreUploadError = "Field 'length' has been set, but is invalid"
 )
+
+// coreUploadError is returned for errors that are not in a leaf method,
+// that have no specialized error
+type coreUploadError string
+
+// Error implements the error interface.
+func (e coreUploadError) Error() string { return string(e) }
 
 // Handler represents a configured instance of this plugin for uploads.
 //
@@ -93,12 +103,12 @@ inScope:
 	case "MOVE":
 		destName := r.Header.Get("Destination")
 		if len(r.URL.Path) < 2 || destName == "" {
-			return http.StatusBadRequest, nil
+			return http.StatusBadRequest, errNoDestination
 		}
 		return h.MoveOneFile(scope, config, r.URL.Path, destName)
 	case "DELETE":
 		if len(r.URL.Path) < 2 {
-			return http.StatusBadRequest, nil
+			return http.StatusBadRequest, errNoDestination
 		}
 		return h.DeleteOneFile(scope, config, r.URL.Path)
 	case http.MethodPost:
@@ -107,12 +117,12 @@ inScope:
 		case strings.HasPrefix(ctype, "multipart/form-data"):
 			return h.ServeMultipartUpload(w, r, scope, config)
 		case ctype != "": // other envelope formats, not implemented
-			return http.StatusUnsupportedMediaType, nil // 415: unsupported media type
+			return http.StatusUnsupportedMediaType, errUnknownEnvelopeFormat
 		}
 		fallthrough
 	case http.MethodPut:
 		if len(r.URL.Path) < 2 {
-			return http.StatusBadRequest, nil
+			return http.StatusBadRequest, errNoDestination
 		}
 		_, retval, err := h.WriteOneHTTPBlob(scope, config, r.URL.Path,
 			r.Header.Get("Content-Length"), r.Body)
@@ -132,7 +142,7 @@ func (h *Handler) ServeMultipartUpload(w http.ResponseWriter, r *http.Request,
 		return http.StatusUnsupportedMediaType, errCannotReadMIMEMultipart
 	}
 
-	for {
+	for partNum := 1; ; partNum++ {
 		part, err := mr.NextPart()
 		if err == io.EOF {
 			break
@@ -148,7 +158,8 @@ func (h *Handler) ServeMultipartUpload(w http.ResponseWriter, r *http.Request,
 
 		_, retval, err := h.WriteOneHTTPBlob(scope, config, fileName, part.Header.Get("Content-Length"), part)
 		if err != nil {
-			return retval, err
+			// Don't use the fileName here: it is controlled by the user.
+			return retval, errors.Wrap(err, "MIME Multipart exploding failed on part "+strconv.Itoa(partNum))
 		}
 	}
 
@@ -189,12 +200,12 @@ func (h *Handler) MoveOneFile(scope string, config *ScopeConfiguration,
 	fromFilename, toFilename string) (int, error) {
 	frompath, fromname, err := h.translateForFilesystem(scope, fromFilename, config)
 	if err != nil {
-		return 422, err
+		return 422, errors.Wrap(err, "Invalid source filepath")
 	}
 	moveFrom := filepath.Join(frompath, fromname)
 	topath, toname, err := h.translateForFilesystem(scope, toFilename, config)
 	if err != nil {
-		return 422, err
+		return 422, errors.Wrap(err, "Invalid destination filepath")
 	}
 	moveTo := filepath.Join(topath, toname)
 
@@ -214,7 +225,7 @@ func (h *Handler) MoveOneFile(scope string, config *ScopeConfiguration,
 	if strings.HasSuffix(err.Error(), "directory not empty") {
 		return http.StatusConflict, nil
 	}
-	return http.StatusInternalServerError, nil
+	return http.StatusInternalServerError, errors.Wrap(err, "MOVE failed")
 }
 
 // DeleteOneFile deletes from disk like "rm -r" and is used with HTTP DELETE.
@@ -224,7 +235,7 @@ func (h *Handler) MoveOneFile(scope string, config *ScopeConfiguration,
 func (h *Handler) DeleteOneFile(scope string, config *ScopeConfiguration, fileName string) (int, error) {
 	path, fname, err := h.translateForFilesystem(scope, fileName, config)
 	if err != nil {
-		return 422, os.ErrPermission // 422: unprocessable entity
+		return 422, err // 422: unprocessable entity
 	}
 	deleteThis := filepath.Join(path, fname)
 
@@ -239,9 +250,9 @@ func (h *Handler) DeleteOneFile(scope string, config *ScopeConfiguration, fileNa
 	case nil:
 		return http.StatusNoContent, nil // 204
 	case os.ErrPermission:
-		return http.StatusForbidden, nil
+		return http.StatusForbidden, errors.Wrap(err, "DELETE failed")
 	}
-	return http.StatusInternalServerError, nil
+	return http.StatusInternalServerError, errors.Wrap(err, "DELETE failed")
 }
 
 // WriteOneHTTPBlob handles HTTP PUT (and HTTP POST without envelopes),
@@ -249,15 +260,15 @@ func (h *Handler) DeleteOneFile(scope string, config *ScopeConfiguration, fileNa
 func (h *Handler) WriteOneHTTPBlob(scope string, config *ScopeConfiguration, fileName,
 	anticipatedSize string, r io.Reader) (uint64, int, error) {
 	expectBytes, _ := strconv.ParseUint(anticipatedSize, 10, 64)
-	if anticipatedSize != "" && expectBytes <= 0 { // we cannot work with that
-		return 0, http.StatusLengthRequired, nil // 411: length required
+	if anticipatedSize != "" && expectBytes <= 0 {
+		return 0, http.StatusLengthRequired, errLengthInvalid
 		// Usually 411 is used for the outermost element.
 		// We don't require any length; but if the key exists, the value must be valid.
 	}
 
 	path, fname, err := h.translateForFilesystem(scope, fileName, config)
 	if err != nil {
-		return 0, 422, os.ErrPermission // 422: unprocessable entity
+		return 0, 422, err // 422: unprocessable entity
 	}
 
 	callback := config.UploadProgressCallback

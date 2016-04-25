@@ -1,7 +1,6 @@
 package upload // import "blitznote.com/src/caddy.upload"
 
 import (
-	"errors"
 	"math"
 	"sort"
 	"strconv"
@@ -20,13 +19,16 @@ const (
 
 	runeSpatium = '\u2009'
 
-	errStrUnexpectedRange = "Unexpected Unicode range: "
+	errStrUnexpectedRange unicodeBlocklistParsingError = "Unexpected Unicode range: "
+	errOutOfBounds        unicodeBlocklistParsingError = "Value out of bounds"
 )
 
-// Happen when parsing ranges.
-var (
-	errOutOfBounds = errors.New("Value out of bounds")
-)
+// unicodeBlocklistParsingError happens translating a string to a unicode.RangeTable
+// and is not recoverable.
+type unicodeBlocklistParsingError string
+
+// Error implements the error interface.
+func (e unicodeBlocklistParsingError) Error() string { return string(e) }
 
 // Not all runes in unicode.PrintRanges are suitable for filenames.
 // They are collected here.
@@ -114,23 +116,23 @@ func ParseUnicodeBlockList(str string) (*unicode.RangeTable, error) {
 		)
 
 		if tok != scanner.Ident {
-			return nil, errors.New(errStrUnexpectedRange + s.Pos().String())
+			return nil, unicodeBlocklistParsingError(errStrUnexpectedRange.Error() + s.Pos().String())
 		}
 		if low, err = strconv.ParseUint(strings.TrimLeft(s.TokenText(), "uU+x"), 16, 32); err != nil {
-			return nil, errors.New(errStrUnexpectedRange + s.Pos().String())
+			return nil, unicodeBlocklistParsingError(errStrUnexpectedRange.Error() + s.Pos().String())
 		}
 
 		tok = s.Scan()
 		if !(tok == '-' || tok == '–') {
-			return nil, errors.New(errStrUnexpectedRange + s.Pos().String())
+			return nil, unicodeBlocklistParsingError(errStrUnexpectedRange.Error() + s.Pos().String())
 		}
 
 		tok = s.Scan()
 		if tok != scanner.Ident {
-			return nil, errors.New(errStrUnexpectedRange + s.Pos().String())
+			return nil, unicodeBlocklistParsingError(errStrUnexpectedRange.Error() + s.Pos().String())
 		}
 		if high, err = strconv.ParseUint(strings.TrimLeft(s.TokenText(), "uU+x"), 16, 32); err != nil {
-			return nil, errors.New(errStrUnexpectedRange + s.Pos().String())
+			return nil, unicodeBlocklistParsingError(errStrUnexpectedRange.Error() + s.Pos().String())
 		}
 
 		tok = s.Scan()
@@ -141,10 +143,10 @@ func ParseUnicodeBlockList(str string) (*unicode.RangeTable, error) {
 
 		tok = s.Scan()
 		if tok != scanner.Int {
-			return nil, errors.New(errStrUnexpectedRange + s.Pos().String())
+			return nil, unicodeBlocklistParsingError(errStrUnexpectedRange.Error() + s.Pos().String())
 		}
 		if stride, err = strconv.ParseUint(s.TokenText(), 10, 32); err != nil {
-			return nil, errors.New(errStrUnexpectedRange + s.Pos().String())
+			return nil, unicodeBlocklistParsingError(errStrUnexpectedRange.Error() + s.Pos().String())
 		}
 
 		haveRanges = append(haveRanges, [3]uint64{low, high, stride})
