@@ -3,6 +3,7 @@ package upload // import "blitznote.com/src/caddy.upload"
 import (
 	"errors"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -73,6 +74,7 @@ inScope:
 			config.IncomingHmacSecretsLock.RUnlock()
 
 			if config.SilenceAuthErrors {
+				log.Printf("[WARNING] upload/auth: Request not authorized: %v", err) // Caddy has no proper logging atm
 				return h.Next.ServeHTTP(w, r)
 			}
 			resp := err.SuggestedResponseCode()
