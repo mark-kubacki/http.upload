@@ -30,6 +30,7 @@ const (
 	errNoDestination           coreUploadError = "A destination is missing"
 	errUnknownEnvelopeFormat   coreUploadError = "Unknown envelope format"
 	errLengthInvalid           coreUploadError = "Field 'length' has been set, but is invalid"
+	errWebdavDisabled          coreUploadError = "WebDAV had been disabled"
 )
 
 // coreUploadError is returned for errors that are not in a leaf method,
@@ -77,6 +78,16 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error)
 	}
 	return h.Next.ServeHTTP(w, r)
 inScope:
+
+	if config.DisableWebdav {
+		switch r.Method {
+		case "COPY", "MOVE", "DELETE":
+			if config.SilenceAuthErrors {
+				return h.Next.ServeHTTP(w, r)
+			}
+			return http.StatusMethodNotAllowed, errWebdavDisabled
+		}
+	}
 
 	config.IncomingHmacSecretsLock.RLock()
 	if len(config.IncomingHmacSecrets) > 0 {

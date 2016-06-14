@@ -78,6 +78,9 @@ type ScopeConfiguration struct {
 	// This keeps track of whether said flags has been set.
 	AcknowledgedNoTLS bool
 
+	// This basically disables everything except POST and PUT.
+	DisableWebdav bool
+
 	// Set this to reject any non-conforming filenames.
 	UnicodeForm *struct{ Use norm.Form }
 
@@ -168,6 +171,8 @@ func parseCaddyConfig(c *setup.Controller) (*HandlerConfiguration, error) {
 				config.SilenceAuthErrors = true
 			case "yes_without_tls":
 				config.AcknowledgedNoTLS = true
+			case "disable_webdav":
+				config.DisableWebdav = true
 			case "filenames_form":
 				if !c.NextArg() {
 					return siteConfig, c.ArgErr()
