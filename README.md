@@ -48,6 +48,7 @@ upload <path> {
 
 	filenames_form      <none|NFC|NFD>
 	filenames_in        <u0000-uff00> [<u0000-uff00>| …]
+	random_suffix_len   0..N
 
 	hmac_keys_in        <keyid_0=base64(binary)> [<keyid_1=base64(binary)>| …]
 	timestamp_tolerance <0..32>
@@ -75,6 +76,10 @@ These are optional:
    The ranges' bounds must be given in hexadecimal and start with letter ```u```.
    Use this setting to prevent users from uploading files in, for example, Cyrillic
    when all you like to see is Latin and/or Chinese alphabets.
+ * **random_suffix_len**, if > 0, will result in all filenames getting a randomized suffix.
+   The suffix will be started by `_` and placed before any extension.
+   For example, `image.png` will be written as `image_a107xm.png` with configuration value *6*.
+   (The default is 0 for off.)
 
 Unless you have decided to use a different authentication and/or authorization plugin:
 

@@ -2,6 +2,7 @@ package upload // import "blitznote.com/src/caddy.upload"
 
 import (
 	"math"
+	"math/rand"
 	"sort"
 	"strconv"
 	"strings"
@@ -187,4 +188,23 @@ func ParseUnicodeBlockList(str string) (*unicode.RangeTable, error) {
 	}
 
 	return &rt, nil
+}
+
+// printableSuffix returns some printable chars, meant to be used as
+// randomized suffix in filenames.
+func printableSuffix(wantedLength uint32) string {
+	suffix := make([]byte, wantedLength, wantedLength)
+	rand.Read(suffix) // most sources of randomness return full words; don't use N times rand.Int31()
+
+	for idx, c := range suffix {
+		c = (c % 36)
+		if c <= 9 {
+			c += 48 // 48–57 → 0–9
+		} else {
+			c += 87 // 97–122 → a–z
+		}
+		suffix[idx] = c
+	}
+
+	return string(suffix)
 }

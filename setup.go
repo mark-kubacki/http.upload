@@ -83,6 +83,9 @@ type ScopeConfiguration struct {
 
 	// Limit the acceptable alphabet(s) for filenames by setting this value.
 	RestrictFilenamesTo []*unicode.RangeTable
+
+	// Append '_' and a randomized suffix of that length.
+	RandomizedSuffixLength uint32
 }
 
 // HandlerConfiguration is the result of directives found in a 'Caddyfile'.
@@ -192,6 +195,15 @@ func parseCaddyConfig(c *setup.Controller) (*HandlerConfiguration, error) {
 					return siteConfig, c.ArgErr()
 				}
 				config.RestrictFilenamesTo = []*unicode.RangeTable{v}
+			case "random_suffix_len":
+				if !c.NextArg() {
+					return siteConfig, c.ArgErr()
+				}
+				l, err := strconv.ParseUint(c.Val(), 10, 32)
+				if err != nil {
+					return siteConfig, c.Err(err.Error())
+				}
+				config.RandomizedSuffixLength = uint32(l)
 			}
 		}
 

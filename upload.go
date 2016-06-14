@@ -271,6 +271,16 @@ func (h *Handler) WriteOneHTTPBlob(scope string, config *ScopeConfiguration, fil
 		return 0, 422, err // 422: unprocessable entity
 	}
 
+	if config.RandomizedSuffixLength > 0 {
+		extension := filepath.Ext(fname)
+		basename := strings.TrimSuffix(fname, extension)
+		if basename == "" {
+			fname = printableSuffix(config.RandomizedSuffixLength) + extension
+		} else {
+			fname = basename + "_" + printableSuffix(config.RandomizedSuffixLength) + extension
+		}
+	}
+
 	callback := config.UploadProgressCallback
 	if callback == nil {
 		callback = noopUploadProgressCallback
