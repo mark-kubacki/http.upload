@@ -1,0 +1,48 @@
+variables:
+  BUILD_SOURCE: "https://hub.blitznote.com/src/caddy.upload/pipelines"
+  CADDY_ORIGIN: "https://hub.blitznote.com/mark/caddy.git"
+  CADDY_BRANCH: "next"
+  CADDY_COMMIT: "07441674a92e3975f4d77176b63e2b9e2458175a"
+
+cache:
+  key: "go/$CI_BUILD_REF_NAME"
+  paths:
+  - _vendor-cache/
+
+before_script:
+- cat for-gopkg.in.crt >>/etc/ssl/certs/ca-certificates.crt
+- mkdir -p _vendor-cache /var/go/ours
+- ln -s "$(pwd -P)/_vendor-cache" /var/go/theirs
+- export GOPATH=/var/go/theirs:/var/go/ours
+
+- export GODIR=/var/go/ours/src/blitznote.com/src/caddy.upload
+- mkdir -p "$(dirname "$GODIR")"
+- ln -sfv "$(pwd -P)" "$GODIR"
+
+- export CADDYDIR=/var/go/ours/src/github.com/mholt/caddy
+- mkdir -p "$(dirname "$CADDYDIR")"
+- cd "$(dirname "$CADDYDIR")"
+- if [[ -d "caddy" ]]; then cd caddy; git checkout "$CADDY_BRANCH"; git fetch; git merge "origin/$CADDY_BRANCH"; else git clone -b "$CADDY_BRANCH" "$CADDY_ORIGIN"; fi
+- cd "$CADDYDIR" && git checkout "$CADDY_COMMIT"
+
+- cd "$GODIR"
+- go get -d -t
+- mv /var/go/theirs/src/{blitznote.com,plugin.hosting} /var/go/ours/src/ 2>/dev/null || true
+
+vet:
+  stage: test
+  script:
+  - diff <(echo -n) <(gofmt -s -d $(find . -type f -name '*.go' -not -path "./_*"))
+  - go vet ./...
+
+lint:
+  stage: test
+  script:
+  - /var/go/provided/bin/ineffassign .
+  - /var/go/provided/bin/golint ./...
+
+unittests:
+  stage: test
+  script:
+  - go test -v ./...
+
