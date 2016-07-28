@@ -2,47 +2,106 @@ variables:
   BUILD_SOURCE: "https://hub.blitznote.com/src/caddy.upload/pipelines"
   CADDY_ORIGIN: "https://hub.blitznote.com/mark/caddy.git"
   CADDY_BRANCH: "next"
-  CADDY_COMMIT: "07441674a92e3975f4d77176b63e2b9e2458175a"
+  CADDY_COMMIT: "faa0badbea2d1f434d68a0aa2b7de61fabb283f3"
+
+stages:
+- test
+- build
+- integration_test
 
 cache:
   key: "go/$CI_BUILD_REF_NAME"
   paths:
   - _vendor-cache/
 
-before_script:
-- cat for-gopkg.in.crt >>/etc/ssl/certs/ca-certificates.crt
-- mkdir -p _vendor-cache /var/go/ours
-- ln -s "$(pwd -P)/_vendor-cache" /var/go/theirs
-- export GOPATH=/var/go/theirs:/var/go/ours
+.go_depends_template: &get_dependencies
+  before_script:
+  - cat for-gopkg.in.crt >>/etc/ssl/certs/ca-certificates.crt
+  - mkdir -p _vendor-cache /var/go/ours
+  - ln -s "$(pwd -P)/_vendor-cache" /var/go/theirs
+  - export GOPATH=/var/go/theirs:/var/go/ours
 
-- export GODIR=/var/go/ours/src/blitznote.com/src/caddy.upload
-- mkdir -p "$(dirname "$GODIR")"
-- ln -sfv "$(pwd -P)" "$GODIR"
+  - export GODIR=/var/go/ours/src/blitznote.com/src/caddy.upload
+  - mkdir -p "$(dirname "$GODIR")"
+  - ln -sfv "$(pwd -P)" "$GODIR"
 
-- export CADDYDIR=/var/go/ours/src/github.com/mholt/caddy
-- mkdir -p "$(dirname "$CADDYDIR")"
-- cd "$(dirname "$CADDYDIR")"
-- if [[ -d "caddy" ]]; then cd caddy; git checkout "$CADDY_BRANCH"; git fetch; git merge "origin/$CADDY_BRANCH"; else git clone -b "$CADDY_BRANCH" "$CADDY_ORIGIN"; fi
-- cd "$CADDYDIR" && git checkout "$CADDY_COMMIT"
+  - export CADDYDIR=/var/go/ours/src/github.com/mholt/caddy
+  - mkdir -p "$(dirname "$CADDYDIR")"
+  - cd "$(dirname "$CADDYDIR")"
+  - if [[ -d "caddy" ]]; then cd caddy; git checkout "$CADDY_BRANCH"; git fetch; git merge "origin/$CADDY_BRANCH"; else git clone -b "$CADDY_BRANCH" "$CADDY_ORIGIN"; fi
+  - cd "$CADDYDIR" && git checkout "$CADDY_COMMIT"
 
-- cd "$GODIR"
-- go get -d -t
-- mv /var/go/theirs/src/{blitznote.com,plugin.hosting} /var/go/ours/src/ 2>/dev/null || true
+  - cd "$GODIR"
+  - go get -d -t
+  - mv /var/go/theirs/src/{blitznote.com,plugin.hosting} /var/go/ours/src/ 2>/dev/null || true
 
 vet:
   stage: test
+  <<: *get_dependencies
   script:
   - diff <(echo -n) <(gofmt -s -d $(find . -type f -name '*.go' -not -path "./_*"))
   - go vet ./...
 
 lint:
   stage: test
+  <<: *get_dependencies
   script:
   - /var/go/provided/bin/ineffassign .
   - /var/go/provided/bin/golint ./...
 
 unittests:
   stage: test
+  <<: *get_dependencies
   script:
   - go test -v ./...
+
+compile_ecaddy:
+  stage: build
+  <<: *get_dependencies
+  script:
+  - cd "$CADDYDIR"
+  - go get -d
+  - ./build.bash ecaddy.upload~$(dpkg --print-architecture)
+  - ./ecaddy.upload~$(dpkg --print-architecture) -version
+  - mkdir -p "$GODIR"/_debug && mv ecaddy.upload~$(dpkg --print-architecture) $_
+  artifacts:
+    expire_in: 3 weeks
+    paths:
+    - _debug/
+
+replay_example:
+  stage: integration_test
+  dependencies:
+  - compile_ecaddy
+  image: blitznote/debootstrap-amd64:16.04
+  script:
+  - cd _debug
+  - printf 'localhost:8000\n\nupload /web/path {\n  to "/var/tmp"\n  yes_without_tls\n}\n' | tee Caddyfile
+  - ./ecaddy.upload* &
+
+  - curl -T /etc/os-release http://localhost:8000/web/path/from-release && test -s /var/tmp/from-release
+  - curl -F hostname=@/etc/hostname -F resolv.txt=@/etc/resolv.conf http://localhost:8000/web/path/
+  - cmp /etc/hostname /var/tmp/hostname
+  - cmp /etc/resolv.conf /var/tmp/resolv.conf
+  - 'curl -X MOVE -H "Destination: /web/path/to-release" http://localhost:8000/web/path/from-release && test -s /var/tmp/to-release'
+  - curl -X DELETE http://localhost:8000/web/path/to-release
+
+  - kill %1
+
+image_upload_example:
+  stage: integration_test
+  dependencies:
+  - compile_ecaddy
+  image: blitznote/debootstrap-amd64:16.04
+  script:
+  - cd _debug
+  - head -c $(( 1*1024*1024 )) /dev/zero >image1.jpg
+  - printf 'localhost:8001\n\nupload /web/path {\n  to "/var/tmp"\n  yes_without_tls\n  random_suffix_len 4\n}\n' | tee Caddyfile
+  - ./ecaddy.upload* &
+
+  - curl -T image1.jpg http://localhost:8001/web/path/first-image.jpg
+  - ls -1 /var/tmp/*.jpg
+  - test -s /var/tmp/first-image_????.jpg
+
+  - kill %1
 
