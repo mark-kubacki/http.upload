@@ -61,11 +61,13 @@ compile_ecaddy:
   script:
   - cd "$CADDYDIR"
   - go get -d
+  - sed -i -e '/This is where other plugins/a \\t_ "blitznote.com/src/caddy.upload"' "$CADDYDIR"/caddy/caddymain/run.go
   - cd caddy
   - ./build.bash ecaddy.upload~$(dpkg --print-architecture)
   - ./ecaddy.upload~$(dpkg --print-architecture) -version
   - mkdir -p "$GODIR"/_debug && mv ecaddy.upload~$(dpkg --print-architecture) $_
   - cp -a /usr/bin/cmp "$GODIR"/_debug/
+  - sed -i -e '/caddy.upload/d' "$CADDYDIR"/caddy/caddymain/run.go
   artifacts:
     expire_in: 3 weeks
     paths:
