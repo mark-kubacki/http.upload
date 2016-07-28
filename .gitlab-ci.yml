@@ -1,8 +1,7 @@
 variables:
   BUILD_SOURCE: "https://hub.blitznote.com/src/caddy.upload/pipelines"
-  CADDY_ORIGIN: "https://hub.blitznote.com/mark/caddy.git"
-  CADDY_BRANCH: "next"
-  CADDY_COMMIT: "faa0badbea2d1f434d68a0aa2b7de61fabb283f3"
+  CADDY_ORIGIN: "https://github.com/mholt/caddy.git"
+  CADDY_BRANCH: "master"
 
 stages:
 - test
@@ -25,11 +24,12 @@ cache:
   - mkdir -p "$(dirname "$GODIR")"
   - ln -sfv "$(pwd -P)" "$GODIR"
 
-  - export CADDYDIR=/var/go/ours/src/github.com/mholt/caddy
+  - export CADDYDIR=/var/go/theirs/src/github.com/mholt/caddy
   - mkdir -p "$(dirname "$CADDYDIR")"
   - cd "$(dirname "$CADDYDIR")"
+  - if [[ -d "caddy" ]]; then if ! grep -q -F "$CADDY_ORIGIN" caddy/.git/config; then rm -rf caddy; fi; fi
   - if [[ -d "caddy" ]]; then cd caddy; git checkout "$CADDY_BRANCH"; git fetch; git merge "origin/$CADDY_BRANCH"; else git clone -b "$CADDY_BRANCH" "$CADDY_ORIGIN"; fi
-  - cd "$CADDYDIR" && git checkout "$CADDY_COMMIT"
+  - cd "$CADDYDIR" && git checkout "$(git -C . describe --abbrev=0 --tags HEAD)"
 
   - cd "$GODIR"
   - go get -d -t
@@ -61,6 +61,7 @@ compile_ecaddy:
   script:
   - cd "$CADDYDIR"
   - go get -d
+  - cd caddy
   - ./build.bash ecaddy.upload~$(dpkg --print-architecture)
   - ./ecaddy.upload~$(dpkg --print-architecture) -version
   - mkdir -p "$GODIR"/_debug && mv ecaddy.upload~$(dpkg --print-architecture) $_
