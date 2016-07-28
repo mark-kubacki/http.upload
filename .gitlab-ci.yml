@@ -64,6 +64,7 @@ compile_ecaddy:
   - ./build.bash ecaddy.upload~$(dpkg --print-architecture)
   - ./ecaddy.upload~$(dpkg --print-architecture) -version
   - mkdir -p "$GODIR"/_debug && mv ecaddy.upload~$(dpkg --print-architecture) $_
+  - cp -a /usr/bin/cmp "$GODIR"/_debug/
   artifacts:
     expire_in: 3 weeks
     paths:
@@ -81,8 +82,8 @@ replay_example:
 
   - curl -T /etc/os-release http://localhost:8000/web/path/from-release && test -s /var/tmp/from-release
   - curl -F hostname=@/etc/hostname -F resolv.txt=@/etc/resolv.conf http://localhost:8000/web/path/
-  - cmp /etc/hostname /var/tmp/hostname
-  - cmp /etc/resolv.conf /var/tmp/resolv.conf
+  - ./cmp -b /etc/hostname /var/tmp/hostname
+  - ./cmp -b /etc/resolv.conf /var/tmp/resolv.conf
   - 'curl -X MOVE -H "Destination: /web/path/to-release" http://localhost:8000/web/path/from-release && test -s /var/tmp/to-release'
   - curl -X DELETE http://localhost:8000/web/path/to-release
 
