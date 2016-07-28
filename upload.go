@@ -12,7 +12,7 @@ import (
 
 	"blitznote.com/src/caddy.upload/protofile"
 	"blitznote.com/src/caddy.upload/signature.auth"
-	"github.com/mholt/caddy/middleware"
+	"github.com/mholt/caddy/caddyhttp/httpserver"
 	"github.com/pkg/errors"
 	"golang.org/x/text/unicode/norm"
 )
@@ -46,7 +46,7 @@ func (e coreUploadError) Error() string { return string(e) }
 // something with method ServeHTTP and at least the same member variables
 // that you can find here.
 type Handler struct {
-	Next   middleware.Handler
+	Next   httpserver.Handler
 	Config HandlerConfiguration
 }
 
@@ -70,7 +70,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error)
 	case http.MethodPost, http.MethodPut, "COPY", "MOVE", "DELETE":
 		// iterate over the scopes in the order they have been defined
 		for _, scope = range h.Config.PathScopes {
-			if middleware.Path(r.URL.Path).Matches(scope) {
+			if httpserver.Path(r.URL.Path).Matches(scope) {
 				config = h.Config.Scope[scope]
 				goto inScope
 			}

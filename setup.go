@@ -8,44 +8,50 @@ import (
 	"unicode"
 
 	"blitznote.com/src/caddy.upload/signature.auth"
-	"github.com/mholt/caddy/caddy/setup"
-	"github.com/mholt/caddy/middleware"
+	"github.com/mholt/caddy"
+	"github.com/mholt/caddy/caddyhttp/httpserver"
 	"golang.org/x/text/unicode/norm"
 )
+
+func init() {
+	caddy.RegisterPlugin("upload", caddy.Plugin{
+		ServerType: "http",
+		Action:     Setup,
+	})
+}
 
 // Setup configures an UploadHander instance.
 //
 // This is called by Caddy.
-func Setup(c *setup.Controller) (middleware.Middleware, error) {
+func Setup(c *caddy.Controller) error {
 	config, err := parseCaddyConfig(c)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	if !config.siteHasTLS {
+	site := httpserver.GetConfig(c)
+	if site.TLS == nil || !site.TLS.Enabled {
 		if c.Dispenser.File() == "Testfile" {
 			goto pass
 		}
 		for _, host := range []string{"127.0.0.1", "localhost", "[::1]", "::1"} {
-			if c.Config.Host == host || strings.HasPrefix(c.Config.Host, host) {
+			if site.Addr.Host == host || strings.HasPrefix(site.Addr.Host, host) {
 				goto pass
 			}
 		}
 
-		for _, scopeConf := range config.Scope {
-			if !scopeConf.AcknowledgedNoTLS {
-				return nil, c.Err("You are using plugin 'upload' on a site without TLS.")
-			}
-		}
+		return c.Err("You are using plugin 'upload' on a site without TLS.")
 	}
 
 pass:
-	return func(next middleware.Handler) middleware.Handler {
+	site.AddMiddleware(func(next httpserver.Handler) httpserver.Handler {
 		return &Handler{
 			Next:   next,
 			Config: *config,
 		}
-	}, nil
+	})
+
+	return nil
 }
 
 // ScopeConfiguration represents the settings of a scope (URL path).
@@ -102,16 +108,12 @@ type HandlerConfiguration struct {
 
 	// Maps scopes (paths) to their own and potentially differently configurations.
 	Scope map[string]*ScopeConfiguration
-
-	// Set on initialization. If false, the user will get a friendly reminder to use TLS with this plugin.
-	siteHasTLS bool
 }
 
-func parseCaddyConfig(c *setup.Controller) (*HandlerConfiguration, error) {
+func parseCaddyConfig(c *caddy.Controller) (*HandlerConfiguration, error) {
 	siteConfig := &HandlerConfiguration{
 		PathScopes: make([]string, 0, 1),
 		Scope:      make(map[string]*ScopeConfiguration),
-		siteHasTLS: c.Config != nil && c.Config.TLS.Enabled,
 	}
 
 	for c.Next() {

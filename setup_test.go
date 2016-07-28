@@ -6,7 +6,8 @@ import (
 	"testing"
 	"unicode"
 
-	"github.com/mholt/caddy/caddy/setup"
+	"github.com/mholt/caddy"
+	"github.com/mholt/caddy/caddyhttp/httpserver"
 	. "github.com/smartystreets/goconvey/convey"
 	"golang.org/x/text/unicode/norm"
 )
@@ -206,20 +207,27 @@ func TestSetupParse(t *testing.T) {
 	Convey("Setup of the controller", t, func() {
 		for idx := range tests {
 			test := tests[idx]
-			c := setup.NewTestController(test.config)
-			gotConf, err := parseCaddyConfig(c)
+			c := caddy.NewTestController("http", test.config)
+			err := Setup(c)
+			if test.expectedErr != nil {
+				So(err, ShouldResemble, test.expectedErr)
+				continue
+			}
+
+			mids := httpserver.GetConfig(c).Middleware()
+			So(len(mids), ShouldEqual, 1)
+
+			i := mids[0](httpserver.EmptyNext)
+			myHandler, ok := i.(*Handler)
+			So(ok, ShouldBeTrue)
 
 			// strip functors (cannot compare them)
-			for _, scopeConf := range gotConf.Scope {
+			for _, scopeConf := range myHandler.Config.Scope {
 				scopeConf.UploadProgressCallback = nil
 			}
 
-			if test.expectedErr != nil {
-				So(err, ShouldResemble, test.expectedErr)
-			} else {
-				So(*gotConf, ShouldResemble, test.expectedConf)
-				So(err, ShouldResemble, test.expectedErr)
-			}
+			So(myHandler.Config, ShouldResemble, test.expectedConf)
+			So(err, ShouldResemble, test.expectedErr)
 		}
 	})
 }

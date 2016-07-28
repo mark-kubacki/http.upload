@@ -12,8 +12,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mholt/caddy/caddy/setup"
-	"github.com/mholt/caddy/middleware"
+	"github.com/mholt/caddy"
+	"github.com/mholt/caddy/caddyhttp/httpserver"
 
 	. "github.com/smartystreets/goconvey/convey"
 )
@@ -35,14 +35,17 @@ func init() {
 	}`
 }
 
-func newTestUploadHander(t *testing.T, configExcerpt string) middleware.Handler {
-	c := setup.NewTestController(configExcerpt)
-	m, err := Setup(c)
+func newTestUploadHander(t *testing.T, configExcerpt string) httpserver.Handler {
+	c := caddy.NewTestController("http", configExcerpt)
+	err := Setup(c)
 	if err != nil {
 		t.Fatal(err)
 	}
+	upstream := httpserver.GetConfig(c)
+	mids := upstream.Middleware()
+	m := mids[0]
 
-	next := middleware.HandlerFunc(func(w http.ResponseWriter, r *http.Request) (int, error) {
+	next := httpserver.HandlerFunc(func(w http.ResponseWriter, r *http.Request) (int, error) {
 		return http.StatusTeapot, nil
 	})
 
