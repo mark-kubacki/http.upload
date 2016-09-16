@@ -119,6 +119,7 @@ errs_without_tls:
   - printf '0.0.0.0:8000\n\nupload /web/path {\n  to "/var/tmp"\n  yes_without_tls\n}\n' | tee Caddyfile
   - ./ecaddy.upload* & sleep 0.2
   - if ! pstree | grep -q -F ecaddy; then printf "expected it to run, instead it has exited\n"; exit 6; fi
+  - kill %1
 
   - printf '0.0.0.0:8000\n\nupload /web/path {\n  to "/var/tmp"\n}\n' | tee Caddyfile
   - ./ecaddy.upload* & sleep 0.2

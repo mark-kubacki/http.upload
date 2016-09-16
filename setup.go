@@ -40,7 +40,11 @@ func Setup(c *caddy.Controller) error {
 			}
 		}
 
-		return c.Err("You are using plugin 'upload' on a site without TLS.")
+		for _, scopeConf := range config.Scope {
+			if !scopeConf.AcknowledgedNoTLS {
+				return c.Err("You are using plugin 'upload' on a site without TLS.")
+			}
+		}
 	}
 
 pass:
