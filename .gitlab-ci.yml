@@ -81,7 +81,7 @@ replay_example:
   script:
   - cd _debug
   - printf 'localhost:8000\n\nupload /web/path {\n  to "/var/tmp"\n  yes_without_tls\n}\n' | tee Caddyfile
-  - ./ecaddy.upload* &
+  - ./ecaddy.upload* & sleep 0.2
 
   - curl -T /etc/os-release http://localhost:8000/web/path/from-release && test -s /var/tmp/from-release
   - curl -F hostname=@/etc/hostname -F resolv.txt=@/etc/resolv.conf http://localhost:8000/web/path/
@@ -101,7 +101,7 @@ image_upload_example:
   - cd _debug
   - head -c $(( 1*1024*1024 )) /dev/zero >image1.jpg
   - printf 'localhost:8001\n\nupload /web/path {\n  to "/var/tmp"\n  yes_without_tls\n  random_suffix_len 4\n}\n' | tee Caddyfile
-  - ./ecaddy.upload* &
+  - ./ecaddy.upload* & sleep 0.2
 
   - curl -T image1.jpg http://localhost:8001/web/path/first-image.jpg
   - ls -1 /var/tmp/*.jpg
@@ -109,3 +109,17 @@ image_upload_example:
 
   - kill %1
 
+errs_without_tls:
+  stage: integration_test
+  dependencies:
+  - compile_ecaddy
+  image: blitznote/debootstrap-amd64:16.04
+  script:
+  - cd _debug
+  - printf '0.0.0.0:8000\n\nupload /web/path {\n  to "/var/tmp"\n  yes_without_tls\n}\n' | tee Caddyfile
+  - ./ecaddy.upload* & sleep 0.2
+  - if ! pstree | grep -q -F ecaddy; then printf "expected it to run, instead it has exited\n"; exit 6; fi
+
+  - printf '0.0.0.0:8000\n\nupload /web/path {\n  to "/var/tmp"\n}\n' | tee Caddyfile
+  - ./ecaddy.upload* & sleep 0.2
+  - if pstree | grep -q -F ecaddy; then kill %1; printf "didn't err, but we expected it to\n"; exit 7; fi
