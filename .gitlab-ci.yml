@@ -29,10 +29,12 @@ cache:
   - cd "$(dirname "$CADDYDIR")"
   - if [[ -d "caddy" ]]; then if ! grep -q -F "$CADDY_ORIGIN" caddy/.git/config; then rm -rf caddy; fi; fi
   - if [[ -d "caddy" ]]; then cd caddy; git checkout "$CADDY_BRANCH"; git fetch; git merge "origin/$CADDY_BRANCH"; else git clone -b "$CADDY_BRANCH" "$CADDY_ORIGIN"; fi
-  - cd "$CADDYDIR" && git checkout "$(git -C . describe --abbrev=0 --tags HEAD)"
+  - cd "$CADDYDIR"
+  - git checkout "$(git -C . describe --abbrev=0 --tags HEAD)"
+  - go get -d ./...
 
   - cd "$GODIR"
-  - go get -d -t
+  - go get -d -t ./...
   - mv /var/go/theirs/src/{blitznote.com,plugin.hosting} /var/go/ours/src/ 2>/dev/null || true
 
 vet:
@@ -59,10 +61,8 @@ compile_ecaddy:
   stage: build
   <<: *get_dependencies
   script:
-  - cd "$CADDYDIR"
-  - go get -d
   - sed -i -e '/This is where other plugins/a \\t_ "blitznote.com/src/caddy.upload"' "$CADDYDIR"/caddy/caddymain/run.go
-  - cd caddy
+  - cd "$CADDYDIR"/caddy
   - ./build.bash ecaddy.upload~$(dpkg --print-architecture)
   - ./ecaddy.upload~$(dpkg --print-architecture) -version
   - mkdir -p "$GODIR"/_debug && mv ecaddy.upload~$(dpkg --print-architecture) $_
