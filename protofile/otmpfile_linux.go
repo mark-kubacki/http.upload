@@ -57,7 +57,7 @@ func (p unixProtoFile) Zap() error {
 // Persist gives the file a name.
 //
 // Nameless files can be identified using tuple (PID, FD) and named
-// by linking the FD to a name in the filesystem where it had been opened.
+// by linking the FD to a name in the filesystem on which it had been opened.
 func (p unixProtoFile) Persist() error {
 	err := p.File.Sync()
 	if err != nil {
@@ -66,18 +66,17 @@ func (p unixProtoFile) Persist() error {
 
 	fd := p.File.Fd()
 	oldpath := "/proc/self/fd/" + uitoa(uint(fd)) // always ≥0 (often ≥4)
-	// As of Go 1.6 it is not possible to call Linkat with a FD only.
-	// Therefore we must be tricky with those parameters:
+	// As of Go 1.6 it is not possible to call Linkat with a FD only. This is a workaround.
 	err = linkat(fd, oldpath, unix.AT_FDCWD, p.finalName, unix.AT_SYMLINK_FOLLOW)
-	if os.IsExist(err) { // Someone claimed or name!
+	if os.IsExist(err) { // Someone claimed our name!
 		finfo, err2 := os.Stat(p.finalName)
 		if err2 == nil && !finfo.IsDir() {
-			os.Remove(p.finalName) // Similar to creat() we will "overwrite" it.
+			os.Remove(p.finalName) // To emulate the behaviour of Create we will "overwrite" the other file.
 			err = linkat(fd, oldpath, unix.AT_FDCWD, p.finalName, unix.AT_SYMLINK_FOLLOW)
 		}
 	}
-	// 'linkat' catches many of the errors 'os.Create' would throw.
-	// Only at a later point in a file's lifecycle.
+	// 'linkat' catches many of the errors 'os.Create' would throw,
+	// only with O_TMPFILE at a later point in the file's lifecycle.
 	if err != nil {
 		return err
 	}

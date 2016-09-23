@@ -10,7 +10,7 @@ import (
 )
 
 // use is a no-op, but the compiler cannot see that it is.
-// Calling use(p) ensures that p is kept live until that point.
+// Calling use(p) ensures that p is kept alive until that point.
 //go:noescape
 func use(p unsafe.Pointer)
 
@@ -27,7 +27,7 @@ func uitoa(val uint) string {
 	return string(buf[i:])
 }
 
-// linkat from stdlib, because the latter does not export it with all its parameters.
+// linkat from stdlib, because the latter does not export the syscall's all parameters.
 func linkat(olddirfd uintptr, oldpath string, newdirfd int, newpath string, flags int) (err error) {
 	var _p0 *byte
 	_p0, err = syscall.BytePtrFromString(oldpath)
@@ -48,7 +48,7 @@ func linkat(olddirfd uintptr, oldpath string, newdirfd int, newpath string, flag
 	return
 }
 
-// fcntl was not available at the the this package has been written.
+// fcntl is not available in Go 1.6.
 //
 // It is used here for filesystem leases, not locks.
 func fcntl(fd uintptr, cmd int, arg int) (val int, err error) {

@@ -1,3 +1,5 @@
+// Contains everything related to filename validation.
+
 package upload // import "blitznote.com/src/caddy.upload"
 
 import (
@@ -44,7 +46,7 @@ var excludedRunes = &unicode.RangeTable{
 // IsAcceptableFilename is used to enforce filenames in wanted alphabet(s).
 // Setting 'reduceAcceptableRunesTo' reduces the supremum unicode.PrintRanges.
 //
-// A string with runes other than U+0020 (space) or U+2009 (spatium)
+// A string with runes – other than U+0020 (space) or U+2009 (spatium) –
 // representing space will be rejected.
 //
 // Filenames are not transliterated to prevent loops within clusters of mirrors.
@@ -190,11 +192,10 @@ func ParseUnicodeBlockList(str string) (*unicode.RangeTable, error) {
 	return &rt, nil
 }
 
-// printableSuffix returns some printable chars, meant to be used as
-// randomized suffix in filenames.
+// printableSuffix returns printable chars meant to be used as randomized suffix in filenames.
 func printableSuffix(wantedLength uint32) string {
 	suffix := make([]byte, wantedLength, wantedLength)
-	rand.Read(suffix) // most sources of randomness return full words; don't use N times rand.Int31()
+	rand.Read(suffix)
 
 	for idx, c := range suffix {
 		c = (c % 36)

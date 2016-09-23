@@ -32,7 +32,7 @@ type AuthorizationHeader struct {
 	Signature     []byte
 }
 
-// Parse sets fields to anything it finds in the given string representation.
+// Parse translates a string representation to this struct.
 //
 // Use this to deserialize the result of http.Header.Get(…).
 func (a *AuthorizationHeader) Parse(str string) (err AuthError) {
@@ -102,13 +102,14 @@ func parseAuthorizationHeader(src string, a AuthorizationHeader) (AuthorizationH
 // and timestamp(s) (if provided) are within a tolerance.
 func (a *AuthorizationHeader) CheckFormal(headers http.Header, timestampRecv, timeTolerance uint64) AuthError {
 	for idx := range a.HeadersToSign {
-		v := headers.Get(a.HeadersToSign[idx])
-		if v == "" {
-			return badRequestError(errHeaderIsMissing.Error() + a.HeadersToSign[idx])
-		}
-		if a.HeadersToSign[idx] == "timestamp" || a.HeadersToSign[idx] == "date" {
+		k := a.HeadersToSign[idx]
+		v := headers.Get(k)
+		switch {
+		case v == "":
+			return badRequestError(errHeaderIsMissing.Error() + k)
+		case k == "timestamp" || k == "date":
 			var timestampThen uint64
-			if a.HeadersToSign[idx] == "timestamp" {
+			if k == "timestamp" {
 				timestampThen, _ = strconv.ParseUint(v, 10, 64)
 			} else {
 				t, err := time.Parse(http.TimeFormat, v)

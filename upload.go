@@ -58,11 +58,11 @@ var getTimestamp = func(r *http.Request) uint64 {
 	return uint64(t)
 }
 
-// ServeHTTP catches methods if meant for file manipulation, else is a passthrough.
+// ServeHTTP catches methods meant for file manipulation, else is a passthrough.
 // Directs HTTP methods and fields to the corresponding function calls.
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error) {
 	var (
-		scope  string // a prefix we will need to replace with the target directory
+		scope  string // will be stripped later
 		config *ScopeConfiguration
 	)
 
@@ -138,14 +138,13 @@ inScope:
 		_, retval, err := h.WriteOneHTTPBlob(scope, config, r.URL.Path,
 			r.Header.Get("Content-Length"), r.Body)
 		return retval, err
+	default:
+		return h.Next.ServeHTTP(w, r)
 	}
-
-	// impossible to reach, but makes static code analyzers happy
-	return h.Next.ServeHTTP(w, r)
 }
 
 // ServeMultipartUpload is used on HTTP POST to explode a MIME Multipart envelope
-// into one or more supplied files. They are then supplied to WriteOneHTTPBlob one by one.
+// into one or more supplied files.
 func (h *Handler) ServeMultipartUpload(w http.ResponseWriter, r *http.Request,
 	scope string, config *ScopeConfiguration) (int, error) {
 	mr, err := r.MultipartReader()
@@ -274,7 +273,7 @@ func (h *Handler) WriteOneHTTPBlob(scope string, config *ScopeConfiguration, fil
 	if anticipatedSize != "" && expectBytes <= 0 {
 		return 0, http.StatusLengthRequired, errLengthInvalid
 		// Usually 411 is used for the outermost element.
-		// We don't require any length; but if the key exists, the value must be valid.
+		// We don't require any length; but it must be valid if given.
 	}
 
 	path, fname, err := h.translateForFilesystem(scope, fileName, config)
