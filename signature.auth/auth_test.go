@@ -1,4 +1,4 @@
-package auth // import "blitznote.com/src/caddy.upload/signature.auth"
+package auth // import "hub.blitznote.com/src/caddy.upload/signature.auth"
 
 import (
 	"net/http"

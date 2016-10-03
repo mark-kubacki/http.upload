@@ -1,4 +1,4 @@
-package upload // import "blitznote.com/src/caddy.upload"
+package upload // import "hub.blitznote.com/src/caddy.upload"
 
 import (
 	"crypto/hmac"

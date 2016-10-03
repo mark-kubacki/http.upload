@@ -1,7 +1,7 @@
 // +build !appengine
 // +build !arm
 
-package protofile // import "blitznote.com/src/caddy.upload/protofile"
+package protofile // import "hub.blitznote.com/src/caddy.upload/protofile"
 
 import (
 	"os"

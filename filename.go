@@ -1,6 +1,6 @@
 // Contains everything related to filename validation.
 
-package upload // import "blitznote.com/src/caddy.upload"
+package upload // import "hub.blitznote.com/src/caddy.upload"
 
 import (
 	"math"

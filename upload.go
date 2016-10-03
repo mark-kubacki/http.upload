@@ -1,4 +1,4 @@
-package upload // import "blitznote.com/src/caddy.upload"
+package upload // import "hub.blitznote.com/src/caddy.upload"
 
 import (
 	"io"
@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"blitznote.com/src/caddy.upload/protofile"
-	"blitznote.com/src/caddy.upload/signature.auth"
+	"hub.blitznote.com/src/caddy.upload/protofile"
+	"hub.blitznote.com/src/caddy.upload/signature.auth"
 	"github.com/mholt/caddy/caddyhttp/httpserver"
 	"github.com/pkg/errors"
 	"golang.org/x/text/unicode/norm"
