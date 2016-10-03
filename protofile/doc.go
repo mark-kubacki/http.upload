@@ -11,4 +11,4 @@
 // "proto files" are named only after having been "persisted" (which closes them).
 //
 // Streaming of file contents is currently not supported.
-package protofile // import "blitznote.com/src/caddy.upload/protofile"
+package protofile // import "hub.blitznote.com/src/caddy.upload/protofile"
