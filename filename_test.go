@@ -125,7 +125,7 @@ func TestParseUnicodeBlockList(t *testing.T) {
 					{0x2152, 0x217f, 2},
 				},
 				R32: []unicode.Range32{
-					{0xf0000, 0xf0010, 1},
+					{Lo: 0xf0000, Hi: 0xf0010, Stride: 1},
 				},
 				LatinOffset: 1,
 			}, nil},

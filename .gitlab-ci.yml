@@ -48,8 +48,8 @@ lint:
   stage: test
   <<: *get_dependencies
   script:
-  - /var/go/provided/bin/ineffassign .
-  - /var/go/provided/bin/golint ./...
+  - ineffassign .
+  - golint ./...
 
 unittests:
   stage: test
