@@ -116,7 +116,7 @@ func TestUpload_ServeHTTP(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			So(code, ShouldEqual, 200)
+			So(code, ShouldEqual, 201)
 
 			compareContents(filepath.Join(scratchDir, tempFName), []byte("DELME"))
 		})
@@ -138,7 +138,7 @@ func TestUpload_ServeHTTP(t *testing.T) {
 			}()
 
 			code, _ := h.ServeHTTP(w, req)
-			So(code, ShouldEqual, 200)
+			So(code, ShouldEqual, 201)
 
 			_, err = os.Stat(filepath.Join(scratchDir, scopeName))
 			So(os.IsNotExist(err), ShouldBeTrue)
@@ -199,7 +199,7 @@ func TestUpload_ServeHTTP(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			So(code, ShouldEqual, 200)
+			So(code, ShouldEqual, 201)
 
 			compareContents(filepath.Join(scratchDir, tempFName), []byte("DELME"))
 		})
@@ -233,7 +233,7 @@ func TestUpload_ServeHTTP(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			So(code, ShouldEqual, 200)
+			So(code, ShouldEqual, 201)
 
 			compareContents(filepath.Join(scratchDir, tempFName), []byte("DELME"))
 			compareContents(filepath.Join(scratchDir, tempFName2), []byte("REMOVEME"))
@@ -265,7 +265,7 @@ func TestUpload_ServeHTTP(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			So(code, ShouldEqual, 200)
+			So(code, ShouldEqual, 201)
 
 			compareContents(filepath.Join(scratchDir, tempFName), []byte("DELME"))
 		})
@@ -301,7 +301,7 @@ func TestUpload_ServeHTTP(t *testing.T) {
 			}()
 
 			code, _ := h.ServeHTTP(w, req)
-			So(code, ShouldEqual, 200)
+			So(code, ShouldEqual, 201)
 
 			// write to directory /var/tmp/${tempFName}
 			req, err = http.NewRequest("PUT", "/"+tempFName, strings.NewReader("DELME"))
@@ -327,7 +327,7 @@ func TestUpload_ServeHTTP(t *testing.T) {
 			}()
 
 			code, _ := h.ServeHTTP(w, req)
-			So(code, ShouldEqual, 200)
+			So(code, ShouldEqual, 201)
 
 			// write to directory /var/tmp/${tempFName}
 			req, err = http.NewRequest("PUT", "/"+tempFName+"/"+tempFName, strings.NewReader("DELME"))
@@ -386,8 +386,8 @@ func TestUpload_ServeHTTP(t *testing.T) {
 			}()
 
 			code, _ := h.ServeHTTP(w, req)
-			if code != 200 {
-				So(code, ShouldEqual, 200)
+			if !(code == 200 || code == 201 || code == 204) {
+				So(code, ShouldEqual, 201)
 				return
 			}
 
@@ -415,8 +415,8 @@ func TestUpload_ServeHTTP(t *testing.T) {
 			}()
 
 			code, _ := h.ServeHTTP(w, req)
-			if code != 200 {
-				So(code, ShouldEqual, 200)
+			if !(code == 200 || code == 201 || code == 204) {
+				So(code, ShouldEqual, 201)
 				return
 			}
 

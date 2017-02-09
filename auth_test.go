@@ -75,7 +75,7 @@ func TestUploadAuthentication(t *testing.T) {
 				"zween", computeSignature([]byte("upload"), []string{ts, "ABC"})))
 
 			code, err := h.ServeHTTP(w, req)
-			So(code, ShouldEqual, 200)
+			So(code, ShouldEqual, 201)
 			So(err, ShouldBeNil)
 
 			compareContents(filepath.Join(scratchDir, tempFName), []byte("DELME"))

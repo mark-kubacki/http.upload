@@ -1,5 +1,9 @@
 package auth
 
+import (
+	"net/http"
+)
+
 // AuthError adds a behavioural hint to an Error.
 type AuthError interface {
 	error
@@ -15,7 +19,7 @@ type badRequestError string
 func (e badRequestError) Error() string { return string(e) }
 
 // SuggestedResponseCode implements the AuthError interface.
-func (e badRequestError) SuggestedResponseCode() int { return 400 }
+func (e badRequestError) SuggestedResponseCode() int { return http.StatusBadRequest }
 
 // unauthorizedError is given when the credentials have not been found in a database.
 //
@@ -26,7 +30,7 @@ type unauthorizedError string
 func (e unauthorizedError) Error() string { return string(e) }
 
 // SuggestedResponseCode implements the AuthError interface.
-func (e unauthorizedError) SuggestedResponseCode() int { return 401 }
+func (e unauthorizedError) SuggestedResponseCode() int { return http.StatusUnauthorized }
 
 // forbiddenError is return when the credentials have been found, but don't grant the necessary rights.
 //
@@ -37,4 +41,4 @@ type forbiddenError string
 func (e forbiddenError) Error() string { return string(e) }
 
 // SuggestedResponseCode implements the AuthError interface.
-func (e forbiddenError) SuggestedResponseCode() int { return 403 }
+func (e forbiddenError) SuggestedResponseCode() int { return http.StatusForbidden }

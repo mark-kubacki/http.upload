@@ -173,7 +173,7 @@ func (h *Handler) ServeMultipartUpload(w http.ResponseWriter, r *http.Request,
 		}
 	}
 
-	return http.StatusOK, nil
+	return http.StatusCreated, nil
 }
 
 // Translates the 'scope' into a proper directory, and extracts the filename from the resulting string.
@@ -210,12 +210,12 @@ func (h *Handler) MoveOneFile(scope string, config *ScopeConfiguration,
 	fromFilename, toFilename string) (int, error) {
 	frompath, fromname, err := h.translateForFilesystem(scope, fromFilename, config)
 	if err != nil {
-		return 422, errors.Wrap(err, "Invalid source filepath")
+		return http.StatusUnprocessableEntity, errors.Wrap(err, "Invalid source filepath")
 	}
 	moveFrom := filepath.Join(frompath, fromname)
 	topath, toname, err := h.translateForFilesystem(scope, toFilename, config)
 	if err != nil {
-		return 422, errors.Wrap(err, "Invalid destination filepath")
+		return http.StatusUnprocessableEntity, errors.Wrap(err, "Invalid destination filepath")
 	}
 	moveTo := filepath.Join(topath, toname)
 
@@ -245,7 +245,7 @@ func (h *Handler) MoveOneFile(scope string, config *ScopeConfiguration,
 func (h *Handler) DeleteOneFile(scope string, config *ScopeConfiguration, fileName string) (int, error) {
 	path, fname, err := h.translateForFilesystem(scope, fileName, config)
 	if err != nil {
-		return 422, err // 422: unprocessable entity
+		return http.StatusUnprocessableEntity, err // 422: unprocessable entity
 	}
 	deleteThis := filepath.Join(path, fname)
 
@@ -278,7 +278,7 @@ func (h *Handler) WriteOneHTTPBlob(scope string, config *ScopeConfiguration, fil
 
 	path, fname, err := h.translateForFilesystem(scope, fileName, config)
 	if err != nil {
-		return 0, 422, err // 422: unprocessable entity
+		return 0, http.StatusUnprocessableEntity, err // 422: unprocessable entity
 	}
 
 	if config.RandomizedSuffixLength > 0 {
@@ -302,15 +302,15 @@ func (h *Handler) WriteOneHTTPBlob(scope string, config *ScopeConfiguration, fil
 			return 0, http.StatusConflict, errFileNameConflict // 409
 		}
 		if bytesWritten > 0 && bytesWritten < expectBytes {
-			return bytesWritten, 507, err // 507: insufficient storage
+			return bytesWritten, http.StatusInsufficientStorage, err // 507: insufficient storage
 			// The client could've shortened us.
 		}
-		return bytesWritten, 500, err
+		return bytesWritten, http.StatusInternalServerError, err
 	}
 	if bytesWritten < expectBytes {
-		return bytesWritten, 202, nil // 202: accepted (but not completed)
+		return bytesWritten, http.StatusAccepted, nil // 202: accepted (but not completed)
 	}
-	return bytesWritten, 200, nil // 200: all dope
+	return bytesWritten, http.StatusCreated, nil // 201: Created
 }
 
 // WriteFileFromReader implements an unit of work consisting of
