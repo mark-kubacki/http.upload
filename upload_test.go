@@ -29,6 +29,7 @@ func init() {
 	// don't pull in package 'fmt' for this
 	trivialConfig = `upload /subdir {
 		to "` + scratchDir + `"
+		promise_download_from /newdir
 	}
 	upload / {
 		to "` + scratchDir + `"
@@ -119,6 +120,24 @@ func TestUpload_ServeHTTP(t *testing.T) {
 			So(code, ShouldEqual, 201)
 
 			compareContents(filepath.Join(scratchDir, tempFName), []byte("DELME"))
+		})
+
+		Convey("responds with a correct Location with one uploaded file", func() {
+			tempFName := tempFileName()
+			req, err := http.NewRequest("PUT", "/subdir/"+tempFName, strings.NewReader("DELME"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			req.Header.Set("Content-Length", "5")
+			defer func() {
+				os.Remove(filepath.Join(scratchDir, tempFName))
+			}()
+
+			_, err = h.ServeHTTP(w, req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			So(w.Header().Get("Location"), ShouldEqual, "/newdir/"+tempFName)
 		})
 
 		Convey("strips the prefix correctly", func() {

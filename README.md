@@ -41,15 +41,16 @@ Configuration Syntax
 
 ```
 upload <path> {
-	to                  "<directory>"
+	to                    "<directory>"
 	yes_without_tls
 
-	filenames_form      <none|NFC|NFD>
-	filenames_in        <u0000-uff00> [<u0000-uff00>| …]
-	random_suffix_len   0..N
+	filenames_form        <none|NFC|NFD>
+	filenames_in          <u0000-uff00> [<u0000-uff00>| …]
+	random_suffix_len     0..N
+	promise_download_from <path>
 
-	hmac_keys_in        <keyid_0=base64(binary)> [<keyid_1=base64(binary)>| …]
-	timestamp_tolerance <0..32>
+	hmac_keys_in          <keyid_0=base64(binary)> [<keyid_1=base64(binary)>| …]
+	timestamp_tolerance   <0..32>
 	silent_auth_errors
 }
 ```
@@ -58,9 +59,9 @@ These settings are required:
 
  * **path** is the *scope* below which the plugin will react to any upload requests.
    It will be stripped and no part of any resulting files and directories.
- * **to** is an existing target directory. Must be in quotes.
+ * **to** is an existing target directory. Must be a quoted absolute path.
    When using Linux it is recommended to place this on a filesystem which supports
-   **O_TMPFILE**, such as (but not limited to) *ext4* or *XFS*.
+   **O_TMPFILE**, such as (but not limited to) *ext4* and *XFS*.
 
 These are optional:
 
@@ -78,6 +79,13 @@ These are optional:
    The suffix will be started by `_` and placed before any extension.
    For example, `image.png` will be written as `image_a107xm.png` with configuration value *6*.
    (The default is 0 for off.)
+ * **promise_download_from** is a string that represents a *URI reference*, such as a path.
+   It will be used to indicate where the successfully uploaded file can be downloaded,
+   by adding HTTP header `Location` to applicable responses.
+   It is construed by swapping *upload path* with *promise_download_from*.
+   You will most probably want to set this to the *upload path*.
+   Use this with **random_suffix_len**.
+   The default value is "", and no HTTP headers `Location` will be sent.
 
 Unless you have decided to use a different authentication and/or authorization plugin:
 

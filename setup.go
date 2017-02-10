@@ -68,6 +68,10 @@ type ScopeConfiguration struct {
 	// Target directory on disk that serves as upload destination.
 	WriteToPath string
 
+	// Uploaded files can be gotten back from here.
+	// If ≠ "" this will trigger sending headers such as "Location".
+	ApparentLocation string
+
 	// UploadProgressCallback is called every so often
 	// to report the total bytes written to a single file and the current error,
 	// including 'io.EOF'.
@@ -149,6 +153,11 @@ func parseCaddyConfig(c *caddy.Controller) (*HandlerConfiguration, error) {
 					return siteConfig, c.ArgErr()
 				}
 				config.WriteToPath = writeToPath
+			case "promise_download_from":
+				if !c.NextArg() {
+					return siteConfig, c.ArgErr()
+				}
+				config.ApparentLocation = c.Val()
 			case "hmac_keys_in":
 				keys := c.RemainingArgs()
 				if len(keys) == 0 {

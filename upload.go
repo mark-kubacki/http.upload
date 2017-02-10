@@ -135,8 +135,12 @@ inScope:
 		if len(r.URL.Path) < 2 {
 			return http.StatusBadRequest, errNoDestination
 		}
-		_, retval, err := h.WriteOneHTTPBlob(scope, config, r.URL.Path,
+		_, locationOnDisk, retval, err := h.WriteOneHTTPBlob(scope, config, r.URL.Path,
 			r.Header.Get("Content-Length"), r.Body)
+		if config.ApparentLocation != "" {
+			newApparentLocation := strings.Replace(locationOnDisk, config.WriteToPath, config.ApparentLocation, 1)
+			w.Header().Set("Location", newApparentLocation)
+		}
 		return retval, err
 	default:
 		return h.Next.ServeHTTP(w, r)
@@ -166,10 +170,15 @@ func (h *Handler) ServeMultipartUpload(w http.ResponseWriter, r *http.Request,
 			continue
 		}
 
-		_, retval, err := h.WriteOneHTTPBlob(scope, config, fileName, part.Header.Get("Content-Length"), part)
+		_, locationOnDisk, retval, err := h.WriteOneHTTPBlob(scope, config, fileName, part.Header.Get("Content-Length"), part)
 		if err != nil {
 			// Don't use the fileName here: it is controlled by the user.
 			return retval, errors.Wrap(err, "MIME Multipart exploding failed on part "+strconv.Itoa(partNum))
+		}
+		if config.ApparentLocation != "" {
+			newApparentLocation := strings.Replace(locationOnDisk, config.WriteToPath, config.ApparentLocation, 1)
+			w.Header().Add("Location", newApparentLocation)
+			// Yes, we send this even though the next part might throw an error.
 		}
 	}
 
@@ -267,18 +276,20 @@ func (h *Handler) DeleteOneFile(scope string, config *ScopeConfiguration, fileNa
 
 // WriteOneHTTPBlob handles HTTP PUT (and HTTP POST without envelopes),
 // writes one file to disk by adapting WriteFileFromReader to HTTP conventions.
+//
+// Returns |bytesWritten|, |locationOnDisk|, |suggestHTTPResponseCode|, error.
 func (h *Handler) WriteOneHTTPBlob(scope string, config *ScopeConfiguration, fileName,
-	anticipatedSize string, r io.Reader) (uint64, int, error) {
+	anticipatedSize string, r io.Reader) (uint64, string, int, error) {
 	expectBytes, _ := strconv.ParseUint(anticipatedSize, 10, 64)
 	if anticipatedSize != "" && expectBytes <= 0 {
-		return 0, http.StatusLengthRequired, errLengthInvalid
+		return 0, "", http.StatusLengthRequired, errLengthInvalid
 		// Usually 411 is used for the outermost element.
 		// We don't require any length; but it must be valid if given.
 	}
 
 	path, fname, err := h.translateForFilesystem(scope, fileName, config)
 	if err != nil {
-		return 0, http.StatusUnprocessableEntity, err // 422: unprocessable entity
+		return 0, "", http.StatusUnprocessableEntity, err // 422: unprocessable entity
 	}
 
 	if config.RandomizedSuffixLength > 0 {
@@ -296,21 +307,22 @@ func (h *Handler) WriteOneHTTPBlob(scope string, config *ScopeConfiguration, fil
 		callback = noopUploadProgressCallback
 	}
 	bytesWritten, err := WriteFileFromReader(path, fname, r, expectBytes, callback)
+	locationOnDisk := filepath.Join(path, fname)
 	if err != nil {
 		if os.IsExist(err) || // gets thrown on a double race condition when using O_TMPFILE and linkat
 			strings.HasSuffix(err.Error(), "not a directory") {
-			return 0, http.StatusConflict, errFileNameConflict // 409
+			return 0, locationOnDisk, http.StatusConflict, errFileNameConflict // 409
 		}
 		if bytesWritten > 0 && bytesWritten < expectBytes {
-			return bytesWritten, http.StatusInsufficientStorage, err // 507: insufficient storage
+			return bytesWritten, locationOnDisk, http.StatusInsufficientStorage, err // 507: insufficient storage
 			// The client could've shortened us.
 		}
-		return bytesWritten, http.StatusInternalServerError, err
+		return bytesWritten, locationOnDisk, http.StatusInternalServerError, err
 	}
 	if bytesWritten < expectBytes {
-		return bytesWritten, http.StatusAccepted, nil // 202: accepted (but not completed)
+		return bytesWritten, locationOnDisk, http.StatusAccepted, nil // 202: accepted (but not completed)
 	}
-	return bytesWritten, http.StatusCreated, nil // 201: Created
+	return bytesWritten, locationOnDisk, http.StatusCreated, nil // 201: Created
 }
 
 // WriteFileFromReader implements an unit of work consisting of
