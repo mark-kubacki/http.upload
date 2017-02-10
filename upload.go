@@ -139,7 +139,11 @@ inScope:
 			r.Header.Get("Content-Length"), r.Body)
 		if config.ApparentLocation != "" {
 			newApparentLocation := strings.Replace(locationOnDisk, config.WriteToPath, config.ApparentLocation, 1)
-			w.Header().Set("Location", newApparentLocation)
+			if strings.HasPrefix(newApparentLocation, "//") {
+				w.Header().Set("Location", newApparentLocation[1:])
+			} else {
+				w.Header().Set("Location", newApparentLocation)
+			}
 		}
 		return retval, err
 	default:
@@ -177,7 +181,11 @@ func (h *Handler) ServeMultipartUpload(w http.ResponseWriter, r *http.Request,
 		}
 		if config.ApparentLocation != "" {
 			newApparentLocation := strings.Replace(locationOnDisk, config.WriteToPath, config.ApparentLocation, 1)
-			w.Header().Add("Location", newApparentLocation)
+			if strings.HasPrefix(newApparentLocation, "//") {
+				w.Header().Add("Location", newApparentLocation[1:])
+			} else {
+				w.Header().Add("Location", newApparentLocation)
+			}
 			// Yes, we send this even though the next part might throw an error.
 		}
 	}
@@ -188,8 +196,8 @@ func (h *Handler) ServeMultipartUpload(w http.ResponseWriter, r *http.Request,
 // Translates the 'scope' into a proper directory, and extracts the filename from the resulting string.
 func (h *Handler) translateForFilesystem(scope, providedName string, config *ScopeConfiguration) (fsPath, fsFilename string, err error) {
 	// 'uc' is freely controlled by the uploader
-	uc := strings.TrimPrefix(providedName, scope)                      // "/upload/mine/my.blob" → "/mine/my.blob"
-	s := filepath.Join(config.WriteToPath, strings.TrimLeft(uc, "./")) // → "/var/mine/my.blob"
+	uc := strings.TrimPrefix(providedName, scope) // "/upload/mine/my.blob" → "/mine/my.blob"
+	s := filepath.Join(config.WriteToPath, uc)    // → "/var/mine/my.blob"
 
 	// stop any childish path trickery here
 	translated := filepath.Clean(s) // "/var/mine/../mine/my.blob" → "/var/mine/my.blob"

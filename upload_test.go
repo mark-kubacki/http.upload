@@ -305,6 +305,83 @@ func TestUpload_ServeHTTP(t *testing.T) {
 		})
 	})
 
+	Convey("A random suffix", t, func() {
+		configWithSuffix := `upload / {
+			to                    "` + scratchDir + `"
+			promise_download_from /
+			random_suffix_len     3
+		}`
+
+		h := newTestUploadHander(t, configWithSuffix)
+		w := httptest.NewRecorder()
+
+		Convey("can be used in a full filename as in NAME_XXX.EXT", func() {
+			tempFName := tempFileName()
+
+			// START
+			body := &bytes.Buffer{}
+			writer := multipart.NewWriter(body)
+			p, _ := writer.CreateFormFile("A", "name.ext")
+			p.Write([]byte("REMOVEME"))
+			writer.Close()
+			// END
+
+			req, err := http.NewRequest("POST", "/", body)
+			req.Header.Set("Content-Type", writer.FormDataContentType())
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() {
+				os.Remove(filepath.Join(scratchDir, tempFName))
+			}()
+
+			code, err := h.ServeHTTP(w, req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			So(code, ShouldEqual, 201)
+
+			uploadedAs := w.Header().Get("Location")
+			So(uploadedAs, ShouldNotBeBlank)
+			So(uploadedAs, ShouldStartWith, "/name_")
+			So(uploadedAs, ShouldEndWith, ".ext")
+			So(len(uploadedAs), ShouldEqual, 1+len("name.ext")+1+3) // /name_XXX.ext
+		})
+
+		Convey("will work with a suffix-only upload such as: .EXT", func() {
+			tempFName := tempFileName()
+
+			// START
+			body := &bytes.Buffer{}
+			writer := multipart.NewWriter(body)
+			p, _ := writer.CreateFormFile("B", ".ext")
+			p.Write([]byte("REMOVEME"))
+			writer.Close()
+			// END
+
+			req, err := http.NewRequest("POST", "/", body)
+			req.Header.Set("Content-Type", writer.FormDataContentType())
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() {
+				os.Remove(filepath.Join(scratchDir, tempFName))
+			}()
+
+			code, err := h.ServeHTTP(w, req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			So(code, ShouldEqual, 201)
+
+			uploadedAs := w.Header().Get("Location")
+			So(uploadedAs, ShouldNotBeBlank)
+			So(uploadedAs, ShouldStartWith, "/")
+			So(uploadedAs, ShouldEndWith, ".ext")
+			So(len(uploadedAs), ShouldEqual, 1+3+len(".ext")) // /XXX.ext
+		})
+	})
+
 	Convey("Handling of conflicts includes", t, func() {
 		h := newTestUploadHander(t, trivialConfig)
 		w := httptest.NewRecorder()
