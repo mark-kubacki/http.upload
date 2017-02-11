@@ -1,3 +1,6 @@
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 // Package auth implements authorization scheme Signature,
 // which works using MIME headers.
 //

@@ -1,4 +1,4 @@
-﻿Copyright © 2016 Mark Kubacki <mk@blitznote.com>
+﻿Copyright © 2016–2017 Mark Kubacki <mk@blitznote.com>
 All rights reserved.
 
 "You" or "Your" means an individual or a legal entity exercising rights
@@ -34,7 +34,7 @@ implication, appearance, or otherwise.
    * You do not conduct, endorse, promote, assist in or authorize
 offenses against privacy. Nor do you train how to do so, or create,
 alter, install, maintain or operate tools with the effect of, intention
-to or designed for the purpose of decreasing privacy, with the exception
+to, or designed for the purpose of decreasing privacy; with the exception
 of a communication you are a sender or receiver thereof, or overtly
 monitoring your own premises, or to the absolute unavoidable minimum iff
 being a service provider for the sender or receiver and having a specific
@@ -42,18 +42,17 @@ prior written permission of the sender or receiver.
      Offenses against privacy include, but are not limited to:
    - mass surveillance, "dragnet" surveillance, warrantless wiretapping,
      wiretapping for preventive purposes, monitoring or interception
-     of communication
+     of communication,
    - collection of communication metadata, collection of or accessing
      stored communication, obtaining communications information,
    - tampering with private communications,
    - decryption of messages,
    - aural transfer,
-   - or storing, transmitting or accessing metadata and/or messages
+   - and/or storing, transmitting and/or accessing metadata and/or messages
      obtained by a means decreasing and/or offending privacy as expressed
      above.
-This even applies to telephonic, wired and electronic communication,
-including stored messages, even if no reasonable expection of privacy
-can be assumed, and even if it is deemed being "lawful" to do so.
+This even applies if no reasonable expection of privacy can be assumed,
+and even if it is deemed being "lawful" to do so.
 
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
 "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
