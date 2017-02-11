@@ -23,6 +23,9 @@ import (
 const (
 	// at this point this is an arbitrary number
 	reportProgressEveryBytes = 1 << 15
+
+	// Part of this is used to display a substitute for a version number ofthe plugin.
+	hashsumOfUploadSource = "$Id$"
 )
 
 // Errors used in functions that resemble the core logic of this plugin.

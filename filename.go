@@ -27,6 +27,9 @@ const (
 
 	errStrUnexpectedRange unicodeBlocklistParsingError = "Unexpected Unicode range: "
 	errOutOfBounds        unicodeBlocklistParsingError = "Value out of bounds"
+
+	// Part of this is used to display a substitute for a version number of the plugin.
+	hashsumOfFilenameSource = "$Id$"
 )
 
 // unicodeBlocklistParsingError happens translating a string to a unicode.RangeTable
