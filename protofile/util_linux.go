@@ -62,3 +62,14 @@ func fcntl(fd uintptr, cmd int, arg int) (val int, err error) {
 	}
 	return
 }
+
+// fallocate might fail with EOPNOTSUPP on filesystems that doesn't
+// support it, such as NFS. Still, we should not fail here.
+// This is used by SizeWillBe to optimize allocation.
+func fallocate(fd uintptr, off int64, len int64) (err error) {
+	err := syscall.Fallocate(fd, 0, off, len)
+	if err == syscall.EOPNOTSUPP {
+		return nil
+	}
+	return err
+}

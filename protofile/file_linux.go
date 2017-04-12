@@ -5,7 +5,6 @@ package protofile // import "blitznote.com/src/caddy.upload/protofile"
 
 import (
 	"os"
-	"syscall"
 )
 
 // Call this to discard the file.
@@ -43,11 +42,11 @@ func (p generalizedProtoFile) SizeWillBe(numBytes uint64) error {
 
 	fd := int(p.File.Fd())
 	if numBytes <= maxInt64 {
-		return syscall.Fallocate(fd, 0, 0, int64(numBytes))
+		return fallocate(fd, 0, int64(numBytes))
 	}
-	err := syscall.Fallocate(fd, 0, 0, maxInt64)
+	err := fallocate(fd, 0, maxInt64)
 	if err != nil {
 		return err
 	}
-	return syscall.Fallocate(fd, 0, maxInt64, int64(numBytes-maxInt64))
+	return fallocate(fd, maxInt64, int64(numBytes-maxInt64))
 }
