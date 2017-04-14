@@ -6,8 +6,8 @@
 package upload // import "blitznote.com/src/caddy.upload"
 
 import (
+	"crypto/rand"
 	"math"
-	"math/rand"
 	"sort"
 	"strconv"
 	"strings"
