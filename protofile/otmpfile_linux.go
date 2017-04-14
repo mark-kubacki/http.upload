@@ -94,10 +94,17 @@ func (p unixProtoFile) SizeWillBe(numBytes uint64) error {
 
 	fd := int(p.File.Fd())
 	if numBytes <= maxInt64 {
-		return syscall.Fallocate(fd, 0, 0, int64(numBytes))
+		err := syscall.Fallocate(fd, 0, 0, int64(numBytes))
+		if err == syscall.EOPNOTSUPP {
+			return nil
+		}
+		return err
 	}
 	// Yes, every Exbibyte counts.
 	err := syscall.Fallocate(fd, 0, 0, maxInt64)
+	if err == syscall.EOPNOTSUPP {
+		return nil
+	}
 	if err != nil {
 		return err
 	}
