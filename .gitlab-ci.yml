@@ -124,7 +124,7 @@ errs_without_tls:
     fi
   - kill $!
 
-  - printf ':8000 {\n  log stdout\n  errors {\n    log stderr\n  }\n\n  tls off\n  browse\n\n  upload /web/path {\n    yes_without_tls\n    to "/var/tmp"\n  }\n}\n' | tee Caddyfile
+  - printf ':8000 {\n  log stdout\n  errors {\n    * stderr\n  }\n\n  tls off\n  browse\n\n  upload /web/path {\n    yes_without_tls\n    to "/var/tmp"\n  }\n}\n' | tee Caddyfile
   - ./ecaddy.upload* & sleep 2
   - if [[ ! -e /proc/$!/cmdline ]] && grep -q -F ecaddy /proc/$!/cmdline; then
       printf "The process exited prematurely. It was expected to still run.\n";
