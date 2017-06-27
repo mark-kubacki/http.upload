@@ -2,7 +2,6 @@
 // license that can be found in the LICENSE file.
 
 // +build !appengine
-// +build !arm
 
 package protofile // import "blitznote.com/src/caddy.upload/protofile"
 
