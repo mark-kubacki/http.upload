@@ -141,9 +141,19 @@ inScope:
 		if len(r.URL.Path) < 2 {
 			return http.StatusBadRequest, errNoDestination
 		}
-		_, locationOnDisk, retval, err := h.WriteOneHTTPBlob(scope, config, r.URL.Path,
-			r.Header.Get("Content-Length"), r.Body)
-		if config.ApparentLocation != "" {
+
+		var expectBytes uint64
+		if r.Header.Get("Content-Length") != "" { // unfortunately, sending this header is optional
+			var perr error
+			expectBytes, perr = strconv.ParseUint(r.Header.Get("Content-Length"), 10, 64)
+			if perr != nil || expectBytes <= 0 {
+				return http.StatusBadRequest, errLengthInvalid
+			}
+		}
+
+		_, locationOnDisk, retval, err := h.WriteOneHTTPBlob(scope, config, r.URL.Path, expectBytes, r.Body)
+
+		if err == nil && config.ApparentLocation != "" {
 			newApparentLocation := strings.Replace(locationOnDisk, config.WriteToPath, config.ApparentLocation, 1)
 			if strings.HasPrefix(newApparentLocation, "//") {
 				w.Header().Set("Location", newApparentLocation[1:])
@@ -180,7 +190,15 @@ func (h *Handler) ServeMultipartUpload(w http.ResponseWriter, r *http.Request,
 			continue
 		}
 
-		_, locationOnDisk, retval, err := h.WriteOneHTTPBlob(scope, config, fileName, part.Header.Get("Content-Length"), part)
+		var expectBytes uint64
+		if part.Header.Get("Content-Length") != "" {
+			expectBytes, err = strconv.ParseUint(part.Header.Get("Content-Length"), 10, 64)
+			if err != nil || expectBytes <= 0 {
+				return http.StatusBadRequest, errLengthInvalid
+			}
+		}
+
+		_, locationOnDisk, retval, err := h.WriteOneHTTPBlob(scope, config, fileName, expectBytes, part)
 		if err != nil {
 			// Don't use the fileName here: it is controlled by the user.
 			return retval, errors.Wrap(err, "MIME Multipart exploding failed on part "+strconv.Itoa(partNum))
@@ -292,15 +310,8 @@ func (h *Handler) DeleteOneFile(scope string, config *ScopeConfiguration, fileNa
 // writes one file to disk by adapting WriteFileFromReader to HTTP conventions.
 //
 // Returns |bytesWritten|, |locationOnDisk|, |suggestHTTPResponseCode|, error.
-func (h *Handler) WriteOneHTTPBlob(scope string, config *ScopeConfiguration, fileName,
-	anticipatedSize string, r io.Reader) (uint64, string, int, error) {
-	expectBytes, _ := strconv.ParseUint(anticipatedSize, 10, 64)
-	if anticipatedSize != "" && expectBytes <= 0 {
-		return 0, "", http.StatusLengthRequired, errLengthInvalid
-		// Usually 411 is used for the outermost element.
-		// We don't require any length; but it must be valid if given.
-	}
-
+func (h *Handler) WriteOneHTTPBlob(scope string, config *ScopeConfiguration, fileName string,
+	expectBytes uint64, r io.Reader) (uint64, string, int, error) {
 	path, fname, err := h.translateForFilesystem(scope, fileName, config)
 	if err != nil {
 		return 0, "", http.StatusUnprocessableEntity, err // 422: unprocessable entity

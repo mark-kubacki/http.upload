@@ -152,6 +152,7 @@ func TestUpload_ServeHTTP(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			req.Header.Set("Content-Length", "5")
 			defer func() {
 				os.RemoveAll(filepath.Join(scratchDir, scopeName))
 			}()
@@ -213,6 +214,7 @@ func TestUpload_ServeHTTP(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			req.Header.Set("Content-Length", "5")
 			defer func() {
 				os.Remove(filepath.Join(scratchDir, tempFName))
 			}()
@@ -299,6 +301,7 @@ func TestUpload_ServeHTTP(t *testing.T) {
 				t.Fatal(err)
 			}
 			req.Header.Set("Content-Type", "chunks-of/base64")
+			req.Header.Set("Content-Length", "10")
 			defer func() {
 				os.Remove(filepath.Join(scratchDir, tempFName))
 			}()
@@ -395,6 +398,7 @@ func TestUpload_ServeHTTP(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			req.Header.Set("Content-Length", "5")
 			defer func() {
 				os.Remove(filepath.Join(scratchDir, tempFName, tempFName))
 			}()
@@ -407,6 +411,7 @@ func TestUpload_ServeHTTP(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			req.Header.Set("Content-Length", "5")
 			defer func() {
 				os.RemoveAll(filepath.Join(scratchDir, tempFName))
 			}()
@@ -421,6 +426,7 @@ func TestUpload_ServeHTTP(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			req.Header.Set("Content-Length", "5")
 			defer func() {
 				os.Remove(filepath.Join(scratchDir, tempFName))
 			}()
@@ -433,6 +439,7 @@ func TestUpload_ServeHTTP(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			req.Header.Set("Content-Length", "5")
 			defer func() {
 				os.RemoveAll(filepath.Join(scratchDir, tempFName, tempFName))
 			}()
@@ -456,6 +463,7 @@ func TestUpload_ServeHTTP(t *testing.T) {
 			defer func() {
 				os.Remove(filepath.Join(scratchDir, tempFName))
 			}()
+			req.Header.Set("Content-Length", "5")
 
 			code, _ := h.ServeHTTP(w, req)
 			if code != 200 {
@@ -483,6 +491,7 @@ func TestUpload_ServeHTTP(t *testing.T) {
 			defer func() {
 				os.Remove(filepath.Join(scratchDir, tempFName))
 			}()
+			req.Header.Set("Content-Length", "5")
 
 			code, _ := h.ServeHTTP(w, req)
 			if !(code == 200 || code == 201 || code == 204) {
@@ -512,6 +521,7 @@ func TestUpload_ServeHTTP(t *testing.T) {
 			defer func() {
 				os.Remove(filepath.Join(scratchDir, tempFName))
 			}()
+			req.Header.Set("Content-Length", "5")
 
 			code, _ := h.ServeHTTP(w, req)
 			if !(code == 200 || code == 201 || code == 204) {
