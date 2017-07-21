@@ -170,8 +170,7 @@ upload_using_put:
   - ./ecaddy.upload* & sleep 0.2
 
   - fallocate --length $[ 2 * 114 * 1024*1024] medium.file
-  - timeout --foreground 5s
-    curl -w "%{time_pretransfer} %{time_starttransfer} %{time_total} %{speed_upload}\n"
+  - curl -w "%{time_pretransfer} %{time_starttransfer} %{time_total} %{speed_upload}\n"
       -fsS
       -T medium.file http://localhost:8000/web/path/medium.file
   - for i in {1..5}; do
@@ -195,8 +194,7 @@ upload_multipart:
 
   - fallocate --length $[ 114 * 1024*1024] small_1.file
   - fallocate --length $[ 114 * 1024*1024] small_2.file
-  - timeout --foreground 5s
-    curl -w "%{time_pretransfer} %{time_starttransfer} %{time_total} %{speed_upload}\n"
+  - curl -w "%{time_pretransfer} %{time_starttransfer} %{time_total} %{speed_upload}\n"
       -fsS
       -F one=@small_1.file -F two=@small_2.file http://localhost:8000/web/path/
   - for i in {1..5}; do
