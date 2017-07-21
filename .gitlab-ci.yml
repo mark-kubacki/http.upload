@@ -16,7 +16,6 @@ cache:
 
 .go_depends_template: &get_dependencies
   before_script:
-  - cat for-gopkg.in.crt >>/etc/ssl/certs/ca-certificates.crt
   - mkdir -p _vendor-cache /var/go/ours
   - ln -s "$(pwd -P)/_vendor-cache" /var/go/theirs
   - export GOPATH=/var/go/theirs:/var/go/ours
