@@ -1,6 +1,0 @@
-{
-  "directive": "upload",
-  "source": "blitznote.com/src/caddy.upload",
-  "after": "basicauth",
-  "args": "-port 8080"
-}
