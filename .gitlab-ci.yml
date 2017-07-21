@@ -35,7 +35,6 @@ stages:
   - mv /var/go/theirs/src/{blitznote.com,plugin.hosting} /var/go/ours/src/ 2>/dev/null || true
   cache:
     key: "go/$CI_COMMIT_REF_NAME"
-    policy: pull
     paths:
     - _vendor-cache/
 
@@ -47,7 +46,6 @@ get_dependencies:
   - du -sh _vendor-cache
   cache:
     key: "go/$CI_COMMIT_REF_NAME"
-    policy: pull-push
     paths:
     - _vendor-cache/
 
