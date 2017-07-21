@@ -4,17 +4,14 @@ variables:
   CADDY_BRANCH: "master"
 
 stages:
+- prepare
 - test
 - build
 - integration_test
 - benchmarks
 
-cache:
-  key: "go/$CI_BUILD_REF_NAME"
-  paths:
-  - _vendor-cache/
-
 .go_depends_template: &get_dependencies
+  image: "hub.blitznote.com:4567/src/go:1.8"
   before_script:
   - mkdir -p _vendor-cache /var/go/ours
   - ln -s "$(pwd -P)/_vendor-cache" /var/go/theirs
@@ -36,6 +33,23 @@ cache:
   - cd "$GODIR"
   - go get -d -t ./...
   - mv /var/go/theirs/src/{blitznote.com,plugin.hosting} /var/go/ours/src/ 2>/dev/null || true
+  cache:
+    key: "go/$CI_COMMIT_REF_NAME"
+    policy: pull
+    paths:
+    - _vendor-cache/
+
+# To download dependencies once.
+get_dependencies:
+  stage: prepare
+  <<: *get_dependencies
+  script:
+  - du -sh _vendor-cache
+  cache:
+    key: "go/$CI_COMMIT_REF_NAME"
+    policy: pull-push
+    paths:
+    - _vendor-cache/
 
 vet:
   stage: test
@@ -69,7 +83,7 @@ compile_ecaddy:
   - cp -a /usr/bin/cmp "$GODIR"/_debug/
   - sed -i -e '/caddy.upload/d' "$CADDYDIR"/caddy/caddymain/run.go
   artifacts:
-    expire_in: 3 weeks
+    expire_in: 3 days
     paths:
     - _debug/
 
