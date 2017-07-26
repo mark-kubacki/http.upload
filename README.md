@@ -21,7 +21,8 @@ Highlights
  * checks request authorization using scheme Signature
  * can be configured to silently discard unauthorized requests
  * (Linux only) files appear after having been written completely, not before
- * works with Caddy's browse plugin
+ * limits to file- and transaction sizes independent from any *transport encoding*
+ * works with Caddy's *browse* plugin
 
 Warnings
 --------
@@ -48,6 +49,9 @@ upload <path> {
 	filenames_in          <u0000-uff00> [<u0000-uff00>| …]
 	random_suffix_len     0..N
 	promise_download_from <path>
+
+	max_filesize          0..N
+	max_transaction_size  0..N
 
 	hmac_keys_in          <keyid_0=base64(binary)> [<keyid_1=base64(binary)>| …]
 	timestamp_tolerance   <0..32>
@@ -86,6 +90,20 @@ These are optional:
    You will most probably want to set this to the *upload path*.
    Use this with **random_suffix_len**.
    The default value is "", and no HTTP headers `Location` will be sent.
+
+ * By **max_filesize** you can limit the size of individual files.
+   Unless 0, which means "unlimited" and is the default value, it's in *bytes*.
+   As actual size is counted in blocks of a few kilobyte, the effective limit therefore
+   will be slightly higher.
+ * **max_transaction_size** is similar, but especially applies to uploads of more than
+   one file in a go. For example, using *MIME Multipart* uploads.
+   The behaviour with `max_filesize > max_transaction_size` is currently undefined;
+   set *max_transaction_size* to a multiple of *max_filesize*.
+
+Some transfer encodings, such as **base64**, know comments. Those, or super-long headers and the such,
+can be exploited to transfer many more bytes than for example *max_transaction_size* would otherwise cap.
+Mitigate this by utilizing a different plugin, **http.limits**, which merely counts incoming bytes
+ignorant of any encoding. Set a limit of about 1.4× to 2.05× the *max_transaction_size*.
 
 Unless you have decided to use a different authentication and/or authorization plugin:
 

@@ -81,6 +81,9 @@ type ScopeConfiguration struct {
 	// A reasonable default is 1<<2.
 	TimestampTolerance uint64
 
+	MaxFilesize        uint64
+	MaxTransactionSize uint64
+
 	// Target directory on disk that serves as upload destination.
 	WriteToPath string
 
@@ -198,6 +201,24 @@ func parseCaddyConfig(c *caddy.Controller) (*HandlerConfiguration, error) {
 					return siteConfig, c.Err("must be ≤ 32")
 				}
 				config.TimestampTolerance = 1 << s
+			case "max_filesize":
+				if !c.NextArg() {
+					return siteConfig, c.ArgErr()
+				}
+				s, err := strconv.ParseUint(c.Val(), 10, 64)
+				if err != nil {
+					return siteConfig, c.Err(err.Error())
+				}
+				config.MaxFilesize = s
+			case "max_transaction_size":
+				if !c.NextArg() {
+					return siteConfig, c.ArgErr()
+				}
+				s, err := strconv.ParseUint(c.Val(), 10, 64)
+				if err != nil {
+					return siteConfig, c.Err(err.Error())
+				}
+				config.MaxTransactionSize = s
 			case "silent_auth_errors":
 				config.SilenceAuthErrors = true
 			case "yes_without_tls":

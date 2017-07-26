@@ -80,6 +80,42 @@ func TestSetupParse(t *testing.T) {
 		{
 			`upload / {
 				to "` + scratchDir + `"
+				max_filesize 2048000
+			}`,
+			nil,
+			HandlerConfiguration{
+				PathScopes: []string{"/"},
+				Scope: map[string]*ScopeConfiguration{
+					"/": {
+						TimestampTolerance:  1 << 2,
+						MaxFilesize:         2048000,
+						WriteToPath:         scratchDir,
+						IncomingHmacSecrets: make(map[string][]byte),
+					},
+				},
+			},
+		},
+		{
+			`upload / {
+				to "` + scratchDir + `"
+				max_transaction_size 8196000
+			}`,
+			nil,
+			HandlerConfiguration{
+				PathScopes: []string{"/"},
+				Scope: map[string]*ScopeConfiguration{
+					"/": {
+						TimestampTolerance:  1 << 2,
+						MaxTransactionSize:  8196000,
+						WriteToPath:         scratchDir,
+						IncomingHmacSecrets: make(map[string][]byte),
+					},
+				},
+			},
+		},
+		{
+			`upload / {
+				to "` + scratchDir + `"
 				timestamp_tolerance 33
 			}`,
 			errors.New("Testfile:3 - Parse error: must be ≤ 32"),

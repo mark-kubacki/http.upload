@@ -6,6 +6,7 @@ package upload // import "blitznote.com/src/caddy.upload"
 import (
 	"bytes"
 	"crypto/rand"
+	"io/ioutil"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -24,6 +25,7 @@ import (
 var (
 	scratchDir    string // tests will create files and directories here
 	trivialConfig string
+	sizeLimited   string
 )
 
 func init() {
@@ -36,6 +38,22 @@ func init() {
 	}
 	upload / {
 		to "` + scratchDir + `"
+	}`
+
+	sizeLimited = `upload /filesize {
+		to "` + scratchDir + `"
+		max_filesize 64000
+		max_transaction_size 0
+	}
+	upload /transaction {
+		to "` + scratchDir + `"
+		max_filesize 0
+		max_transaction_size 64000
+	}
+	upload /both {
+		to "` + scratchDir + `"
+		max_filesize 64000
+		max_transaction_size 128000
 	}`
 }
 
@@ -549,4 +567,144 @@ func TestUpload_ServeHTTP(t *testing.T) {
 			So(os.IsNotExist(err), ShouldBeFalse)
 		})
 	})
+
+	Convey("Cap", t, func() {
+		w := httptest.NewRecorder()
+		h := newTestUploadHander(t, sizeLimited)
+
+		Convey("maximum filesize for single-file uploads", func() {
+			for _, limitedBy := range [...]string{"filesize", "transaction", "both"} {
+				Convey("by configuring a limit to "+limitedBy, func() {
+					tempFName := tempFileName()
+					req, err := http.NewRequest("POST", "/"+limitedBy+"/"+tempFName, strings.NewReader("DELME"))
+					if err != nil {
+						t.Fatal(err)
+					}
+					defer func() {
+						os.Remove(filepath.Join(scratchDir, tempFName))
+					}()
+
+					// test header processing
+					req.Header.Set("Content-Length", "64001")
+					code, _ := h.ServeHTTP(w, req)
+					So(code, ShouldEqual, 413) // too large, as indicated by the header
+
+					req.Header.Set("Content-Length", "64000")
+					code, _ = h.ServeHTTP(w, req)
+					So(code, ShouldBeIn, 201, 202) // at the limit
+
+					// now change the actual file contents
+					req.Body = ioutil.NopCloser(strings.NewReader(strings.Repeat("\xcc", 64000)))
+					code, _ = h.ServeHTTP(w, req)
+					So(code, ShouldBeIn, 201, 202)
+
+					req.Header.Del("Content-Length")
+					req.Body = ioutil.NopCloser(strings.NewReader(strings.Repeat("\x33", 64001)))
+					code, _ = h.ServeHTTP(w, req)
+					So(code, ShouldEqual, 413)
+				})
+			}
+		})
+
+		Convey("maximum filesize for multi-file uploads", func() {
+			for _, limitedBy := range [...]string{"filesize", "transaction", "both"} {
+				Convey("by configuring a limit to "+limitedBy, func() {
+					tempFName := tempFileName()
+
+					// Test headers separately because multipart.NewWriter does not set them.
+					ctype := "multipart/form-data; boundary=wall"
+					headerOnlyBody := `--wall
+Content-Disposition: form-data; name="fine"; filename="` + tempFName + `"
+Content-Type: application/octet-stream
+Content-Length: 1234
+
+Winter is coming.
+--wall--
+
+`
+
+					req, err := http.NewRequest("POST", "/"+limitedBy, strings.NewReader(headerOnlyBody))
+					req.Header.Set("Content-Type", ctype)
+					if err != nil {
+						t.Fatal(err)
+					}
+					defer func() {
+						os.Remove(filepath.Join(scratchDir, tempFName))
+					}()
+
+					code, err := h.ServeHTTP(w, req)
+					So(code, ShouldBeIn, 201, 202)
+					So(err, ShouldBeNil)
+
+					headerOnlyBody = strings.Replace(headerOnlyBody, "1234", "64001", 1)
+					req, err = http.NewRequest("POST", "/"+limitedBy, strings.NewReader(headerOnlyBody))
+					req.Header.Set("Content-Type", ctype)
+					code, err = h.ServeHTTP(w, req)
+					So(err, ShouldNotBeNil)
+					So(code, ShouldBeIn, 413, 422)
+
+					// As multipart.NewWriter does not set the Content-Length header this is about content only.
+					body, ctype := payloadWithAttachments(tempFName, 64001)
+					req, err = http.NewRequest("POST", "/"+limitedBy+"/"+tempFName, body)
+					req.Header.Set("Content-Type", ctype)
+					code, err = h.ServeHTTP(w, req)
+					So(err, ShouldNotBeNil)
+					So(code, ShouldBeIn, 413, 422)
+
+					body, ctype = payloadWithAttachments(tempFName, 64000)
+					req, err = http.NewRequest("POST", "/"+limitedBy+"/"+tempFName, body)
+					req.Header.Set("Content-Type", ctype)
+					code, err = h.ServeHTTP(w, req)
+					So(code, ShouldBeIn, 201, 202)
+					So(err, ShouldBeNil)
+
+					body, ctype = payloadWithAttachments(tempFName, 64000, 64000)
+					req, err = http.NewRequest("POST", "/"+limitedBy+"/"+tempFName, body)
+					req.Header.Set("Content-Type", ctype)
+					code, err = h.ServeHTTP(w, req)
+					switch limitedBy {
+					case "transaction":
+						So(err, ShouldNotBeNil)
+						So(code, ShouldBeIn, 413, 422)
+					default:
+						So(code, ShouldBeIn, 201, 202)
+						So(err, ShouldBeNil)
+					}
+
+					body, ctype = payloadWithAttachments(tempFName, 64000, 64000, 1)
+					req, err = http.NewRequest("POST", "/"+limitedBy+"/"+tempFName, body)
+					req.Header.Set("Content-Type", ctype)
+					code, err = h.ServeHTTP(w, req)
+					switch limitedBy {
+					case "transaction", "both":
+						So(err, ShouldNotBeNil)
+						So(code, ShouldBeIn, 413, 422)
+					default:
+						So(code, ShouldBeIn, 201, 202)
+						So(err, ShouldBeNil)
+					}
+
+					body, ctype = payloadWithAttachments(tempFName, 64000, 64000, 64001)
+					req, err = http.NewRequest("POST", "/"+limitedBy+"/"+tempFName, body)
+					req.Header.Set("Content-Type", ctype)
+					code, err = h.ServeHTTP(w, req)
+					So(err, ShouldNotBeNil)
+					So(code, ShouldBeIn, 413, 422)
+				})
+			}
+		})
+	})
+}
+
+// payloadWithAttachments is a helper function to test MIME multipart uploads of different sizes.
+func payloadWithAttachments(tempFName string, lengths ...int) (*bytes.Buffer, string) {
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	for _, octets := range lengths {
+		p, _ := writer.CreateFormFile("A", tempFName)
+		p.Write([]byte(strings.Repeat("\x33", octets)))
+	}
+	writer.Close()
+
+	return body, writer.FormDataContentType()
 }

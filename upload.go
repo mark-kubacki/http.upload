@@ -21,7 +21,11 @@ import (
 )
 
 const (
-	// at this point this is an arbitrary number
+	// Every so many bytes the |uploadProgressCallback| is called,
+	// and checked if a file receives more bytes than any quota permits.
+	// For one, this is cheaper than doing it for every byte,
+	// and second, future versions will switch to blockwise writing, which is
+	// more efficient and necessary for some high-speed NICs (think: 10GbE+).
 	reportProgressEveryBytes = 1 << 15
 
 	// Part of this is used to display a substitute for a version number ofthe plugin.
@@ -37,6 +41,8 @@ const (
 	errUnknownEnvelopeFormat   coreUploadError = "Unknown envelope format"
 	errLengthInvalid           coreUploadError = "Field 'length' has been set, but is invalid"
 	errWebdavDisabled          coreUploadError = "WebDAV had been disabled"
+	errFileTooLarge            coreUploadError = "The uploaded file exceeds or would exceed max_filesize"
+	errTransactionTooLarge     coreUploadError = "Upload(s) do or will exceed max_transaction_size"
 )
 
 // coreUploadError is returned for errors that are not in a leaf method,
@@ -142,6 +148,11 @@ inScope:
 			return http.StatusBadRequest, errNoDestination
 		}
 
+		writeQuota, overQuotaErr := config.MaxTransactionSize, errTransactionTooLarge
+		if writeQuota == 0 || (config.MaxFilesize > 0 && config.MaxFilesize < writeQuota) {
+			writeQuota, overQuotaErr = config.MaxFilesize, errFileTooLarge
+		}
+
 		var expectBytes uint64
 		if r.Header.Get("Content-Length") != "" { // unfortunately, sending this header is optional
 			var perr error
@@ -149,9 +160,16 @@ inScope:
 			if perr != nil || expectBytes <= 0 {
 				return http.StatusBadRequest, errLengthInvalid
 			}
+			if writeQuota > 0 && expectBytes > writeQuota { // XXX(mark): skip this check if sparse files are allowed
+				return http.StatusRequestEntityTooLarge, overQuotaErr // http.PayloadTooLarge
+			}
 		}
 
-		_, locationOnDisk, retval, err := h.WriteOneHTTPBlob(scope, config, r.URL.Path, expectBytes, r.Body)
+		bytesWritten, locationOnDisk, retval, err := h.WriteOneHTTPBlob(scope, config, r.URL.Path, expectBytes, writeQuota, r.Body)
+		if writeQuota > 0 && bytesWritten > writeQuota {
+			// The partially uploaded file gets discarded by WriteOneHTTPBlob.
+			return http.StatusRequestEntityTooLarge, overQuotaErr
+		}
 
 		if err == nil && config.ApparentLocation != "" {
 			newApparentLocation := strings.Replace(locationOnDisk, config.WriteToPath, config.ApparentLocation, 1)
@@ -176,6 +194,8 @@ func (h *Handler) ServeMultipartUpload(w http.ResponseWriter, r *http.Request,
 		return http.StatusUnsupportedMediaType, errCannotReadMIMEMultipart
 	}
 
+	var bytesWrittenInTransaction uint64
+
 	for partNum := 1; ; partNum++ {
 		part, err := mr.NextPart()
 		if err == io.EOF {
@@ -190,19 +210,37 @@ func (h *Handler) ServeMultipartUpload(w http.ResponseWriter, r *http.Request,
 			continue
 		}
 
+		writeQuota, overQuotaErr := config.MaxFilesize, errFileTooLarge
+		if config.MaxTransactionSize > 0 {
+			if bytesWrittenInTransaction >= config.MaxTransactionSize {
+				return http.StatusRequestEntityTooLarge, errTransactionTooLarge
+			}
+			if writeQuota == 0 || (config.MaxTransactionSize-bytesWrittenInTransaction) < writeQuota {
+				writeQuota, overQuotaErr = config.MaxTransactionSize-bytesWrittenInTransaction, errTransactionTooLarge
+			}
+		}
+
 		var expectBytes uint64
 		if part.Header.Get("Content-Length") != "" {
 			expectBytes, err = strconv.ParseUint(part.Header.Get("Content-Length"), 10, 64)
 			if err != nil || expectBytes <= 0 {
 				return http.StatusBadRequest, errLengthInvalid
 			}
+			if writeQuota > 0 && expectBytes > writeQuota { // XXX(mark): sparse files would need this
+				return http.StatusRequestEntityTooLarge, overQuotaErr
+			}
 		}
 
-		_, locationOnDisk, retval, err := h.WriteOneHTTPBlob(scope, config, fileName, expectBytes, part)
+		bytesWritten, locationOnDisk, retval, err := h.WriteOneHTTPBlob(scope, config, fileName, expectBytes, writeQuota, part)
+		bytesWrittenInTransaction += bytesWritten
+		if writeQuota > 0 && bytesWritten > writeQuota {
+			return http.StatusRequestEntityTooLarge, overQuotaErr
+		}
 		if err != nil {
 			// Don't use the fileName here: it is controlled by the user.
 			return retval, errors.Wrap(err, "MIME Multipart exploding failed on part "+strconv.Itoa(partNum))
 		}
+
 		if config.ApparentLocation != "" {
 			newApparentLocation := strings.Replace(locationOnDisk, config.WriteToPath, config.ApparentLocation, 1)
 			if strings.HasPrefix(newApparentLocation, "//") {
@@ -311,7 +349,7 @@ func (h *Handler) DeleteOneFile(scope string, config *ScopeConfiguration, fileNa
 //
 // Returns |bytesWritten|, |locationOnDisk|, |suggestHTTPResponseCode|, error.
 func (h *Handler) WriteOneHTTPBlob(scope string, config *ScopeConfiguration, fileName string,
-	expectBytes uint64, r io.Reader) (uint64, string, int, error) {
+	expectBytes, writeQuota uint64, r io.Reader) (uint64, string, int, error) {
 	path, fname, err := h.translateForFilesystem(scope, fileName, config)
 	if err != nil {
 		return 0, "", http.StatusUnprocessableEntity, err // 422: unprocessable entity
@@ -331,7 +369,7 @@ func (h *Handler) WriteOneHTTPBlob(scope string, config *ScopeConfiguration, fil
 	if callback == nil {
 		callback = noopUploadProgressCallback
 	}
-	bytesWritten, err := WriteFileFromReader(path, fname, r, expectBytes, callback)
+	bytesWritten, err := WriteFileFromReader(path, fname, r, expectBytes, writeQuota, callback)
 	locationOnDisk := filepath.Join(path, fname)
 	if err != nil && err != io.EOF {
 		if os.IsExist(err) || // gets thrown on a double race condition when using O_TMPFILE and linkat
@@ -359,10 +397,12 @@ func (h *Handler) WriteOneHTTPBlob(scope string, config *ScopeConfiguration, fil
 //
 // If 'anticipatedSize' ≥ protofile.reserveFileSizeThreshold (usually 32 KiB)
 // then disk space will be reserved before writing (by a ProtoFileBehaver).
+// If the bytes to be written exceed |writeQuota| then the
+// partially or completely written file is discarded.
 //
 // With uploadProgressCallback:
 // The file has been successfully written if "error" remains 'io.EOF'.
-func WriteFileFromReader(path, filename string, r io.Reader, anticipatedSize uint64,
+func WriteFileFromReader(path, filename string, r io.Reader, anticipatedSize, writeQuota uint64,
 	uploadProgressCallback func(uint64, error)) (uint64, error) {
 	wp, err := protofile.IntentNew(path, filename)
 	if err != nil {
@@ -371,7 +411,7 @@ func WriteFileFromReader(path, filename string, r io.Reader, anticipatedSize uin
 	w := *wp
 	defer w.Zap()
 
-	err = w.SizeWillBe(anticipatedSize)
+	err = w.SizeWillBe(anticipatedSize) // if > writeQuota then this could be a sparse file
 	if err != nil {
 		return 0, err
 	}
@@ -379,6 +419,9 @@ func WriteFileFromReader(path, filename string, r io.Reader, anticipatedSize uin
 	var bytesWritten uint64
 	var n int64
 	for err == nil {
+		if writeQuota > 0 && bytesWritten > writeQuota {
+			break
+		}
 		n, err = io.CopyN(w, r, reportProgressEveryBytes)
 		if err == nil || err == io.EOF {
 			bytesWritten += uint64(n)
@@ -389,6 +432,13 @@ func WriteFileFromReader(path, filename string, r io.Reader, anticipatedSize uin
 	if err != nil && err != io.EOF {
 		return bytesWritten, err
 	}
+	if writeQuota > 0 && bytesWritten > writeQuota {
+		// The file will be removed automatically due to the deferred w.Zap().
+		// XXX(mark): on err == io.EOF and a later blockwise writing, don't return here but keep the file instead.
+		uploadProgressCallback(bytesWritten, errFileTooLarge)
+		return bytesWritten, errFileTooLarge
+	}
+
 	err = w.Persist()
 	if err != nil {
 		uploadProgressCallback(bytesWritten, err)
