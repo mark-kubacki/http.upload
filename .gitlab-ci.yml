@@ -73,6 +73,7 @@ unittests:
 
 compile_ecaddy:
   stage: build
+  when: always
   <<: *get_dependencies
   script:
   - sed -i -e '/This is where other plugins/a \\t_ "blitznote.com/src/caddy.upload"' "$CADDYDIR"/caddy/caddymain/run.go
@@ -161,6 +162,7 @@ errs_without_tls:
 
 upload_using_put:
   stage: benchmarks
+  when: manual
   dependencies:
   - compile_ecaddy
   image: blitznote/debootstrap-amd64:16.04
@@ -184,6 +186,7 @@ upload_using_put:
 
 upload_multipart:
   stage: benchmarks
+  when: manual
   dependencies:
   - compile_ecaddy
   image: blitznote/debootstrap-amd64:16.04
