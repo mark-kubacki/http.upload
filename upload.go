@@ -333,18 +333,19 @@ func (h *Handler) WriteOneHTTPBlob(scope string, config *ScopeConfiguration, fil
 	}
 	bytesWritten, err := WriteFileFromReader(path, fname, r, expectBytes, callback)
 	locationOnDisk := filepath.Join(path, fname)
-	if err != nil {
+	if err != nil && err != io.EOF {
 		if os.IsExist(err) || // gets thrown on a double race condition when using O_TMPFILE and linkat
 			strings.HasSuffix(err.Error(), "not a directory") {
 			return 0, locationOnDisk, http.StatusConflict, errFileNameConflict // 409
 		}
 		if bytesWritten > 0 && bytesWritten < expectBytes {
 			return bytesWritten, locationOnDisk, http.StatusInsufficientStorage, err // 507: insufficient storage
-			// The client could've shortened us.
 		}
 		return bytesWritten, locationOnDisk, http.StatusInternalServerError, err
 	}
 	if bytesWritten < expectBytes {
+		// We don't return 422 on incomplete uploads, because it could be a sparse file.
+		// Its contents are kept in any case, therefore returning an error would be inappropriate.
 		return bytesWritten, locationOnDisk, http.StatusAccepted, nil // 202: accepted (but not completed)
 	}
 	return bytesWritten, locationOnDisk, http.StatusCreated, nil // 201: Created
