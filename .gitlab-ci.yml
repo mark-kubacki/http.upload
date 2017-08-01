@@ -171,12 +171,12 @@ upload_using_put:
   - printf 'localhost:8000\n\nupload /web/path {\n  to "/var/tmp"\n  yes_without_tls\n}\n' | tee Caddyfile
   - ./ecaddy.upload* & sleep 0.2
 
-  - fallocate --length $[ 2 * 114 * 1024*1024] medium.file
+  - fallocate --length $[ 5 * 114 * 1024*1024] medium.file
   - curl -w "%{time_pretransfer} %{time_starttransfer} %{time_total} %{speed_upload}\n"
       -fsS
       -T medium.file http://localhost:8000/web/path/medium.file
   - for i in {1..5}; do
-      timeout --foreground 3s
+      timeout --foreground 6s
       curl -w "%{time_pretransfer} %{time_starttransfer} %{time_total} %{speed_upload}\n"
         -fsS
         -T medium.file http://localhost:8000/web/path/medium.file;
@@ -196,15 +196,16 @@ upload_multipart:
   - ./ecaddy.upload* & sleep 0.2
 
   - fallocate --length $[ 114 * 1024*1024] small_1.file
-  - fallocate --length $[ 114 * 1024*1024] small_2.file
   - curl -w "%{time_pretransfer} %{time_starttransfer} %{time_total} %{speed_upload}\n"
       -fsS
-      -F one=@small_1.file -F two=@small_2.file http://localhost:8000/web/path/
+      -F one=@small_1.file -F one=@small_1.file -F one=@small_1.file -F one=@small_1.file -F one=@small_1.file
+      http://localhost:8000/web/path/
   - for i in {1..5}; do
-      timeout --foreground 3s
+      timeout --foreground 8s
       curl -w "%{time_pretransfer} %{time_starttransfer} %{time_total} %{speed_upload}\n"
         -fsS
-        -F one=@small_1.file -F two=@small_2.file http://localhost:8000/web/path/;
+        -F one=@small_1.file -F one=@small_1.file -F one=@small_1.file -F one=@small_1.file -F one=@small_1.file
+        http://localhost:8000/web/path/;
     done
 
   - kill %1
