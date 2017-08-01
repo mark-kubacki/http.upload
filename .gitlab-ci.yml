@@ -11,7 +11,7 @@ stages:
 - benchmarks
 
 .go_depends_template: &get_dependencies
-  image: "hub.blitznote.com:4567/src/go:1.8"
+  image: "hub.blitznote.com:4567/src/go:1.9"
   before_script:
   - mkdir -p _vendor-cache /var/go/ours
   - ln -s "$(pwd -P)/_vendor-cache" /var/go/theirs
