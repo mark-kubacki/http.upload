@@ -78,7 +78,12 @@ compile_ecaddy:
   script:
   - sed -i -e '/This is where other plugins/a \\t_ "blitznote.com/src/caddy.upload"' "$CADDYDIR"/caddy/caddymain/run.go
   - cd "$CADDYDIR"/caddy
-  - ./build.bash ecaddy.upload~$(dpkg --print-architecture)
+  - export pkg="github.com/mholt/caddy/caddy/caddymain"
+  - go build
+      -ldflags  "-s -w -buildid '' -X '${pkg}.gitTag=$(git describe --exact-match HEAD 2>/dev/null)'"
+      -asmflags "-trimpath=${GOPATH}"
+      -gcflags  "-trimpath=${GOPATH}"
+      -o ecaddy.upload~$(dpkg --print-architecture)
   - ./ecaddy.upload~$(dpkg --print-architecture) -version
   - mkdir -p "$GODIR"/_debug && mv ecaddy.upload~$(dpkg --print-architecture) $_
   - cp -a /usr/bin/cmp "$GODIR"/_debug/
