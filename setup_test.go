@@ -39,7 +39,7 @@ func TestSetupParse(t *testing.T) {
 		},
 		{
 			`upload /`,
-			errors.New("Testfile:1 - Parse error: The destination path 'to' is missing"),
+			errors.New("Testfile:1 - Error during parsing: The destination path 'to' is missing"),
 			HandlerConfiguration{},
 		},
 		{
@@ -118,7 +118,7 @@ func TestSetupParse(t *testing.T) {
 				to "` + scratchDir + `"
 				timestamp_tolerance 33
 			}`,
-			errors.New("Testfile:3 - Parse error: must be ≤ 32"),
+			errors.New("Testfile:3 - Error during parsing: must be ≤ 32"),
 			HandlerConfiguration{},
 		},
 		{
@@ -126,7 +126,7 @@ func TestSetupParse(t *testing.T) {
 				to "` + scratchDir + `"
 				timestamp_tolerance 64
 			}`,
-			errors.New("Testfile:3 - Parse error: we're sorry, but by this time Sol has already melted Terra"),
+			errors.New("Testfile:3 - Error during parsing: we're sorry, but by this time Sol has already melted Terra"),
 			HandlerConfiguration{},
 		},
 		{
@@ -153,7 +153,7 @@ func TestSetupParse(t *testing.T) {
 				to "` + scratchDir + `"
 				hmac_keys_in hmac-key-1
 			}`,
-			errors.New("Testfile:3 - Parse error: hmac-key-1"),
+			errors.New("Testfile:3 - Error during parsing: hmac-key-1"),
 			HandlerConfiguration{},
 		},
 		{
