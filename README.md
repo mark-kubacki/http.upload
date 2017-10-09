@@ -42,7 +42,6 @@ Configuration Syntax
 ```
 upload <path> {
 	to                    "<directory>"
-	yes_without_tls
 
 	filenames_form        <none|NFC|NFD>
 	filenames_in          <u0000-uff00> [<u0000-uff00>| …]
@@ -68,7 +67,6 @@ These settings are required:
 
 These are optional:
 
- * **yes_without_tls** must be set if the plugin is used in a *scope* without TLS.
  * **filenames_form**: if given, filenames and directories that are not 
    conforming to Unicode NFC or NFD will be rejected.  
    Set this to one of either values when you get errors indicating that your filesystem

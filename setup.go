@@ -46,24 +46,6 @@ func Setup(c *caddy.Controller) error {
 	}
 
 	site := httpserver.GetConfig(c)
-	if site.TLS == nil || !site.TLS.Enabled {
-		if c.Dispenser.File() == "Testfile" {
-			goto pass
-		}
-		for _, host := range []string{"127.0.0.1", "localhost", "[::1]", "::1"} {
-			if site.Addr.Host == host || strings.HasPrefix(site.Addr.Host, host) {
-				goto pass
-			}
-		}
-
-		for _, scopeConf := range config.Scope {
-			if !scopeConf.AcknowledgedNoTLS {
-				return c.Err("You are using plugin 'upload' on a site without TLS.")
-			}
-		}
-	}
-
-pass:
 	site.AddMiddleware(func(next httpserver.Handler) httpserver.Handler {
 		return &Handler{
 			Next:   next,
@@ -106,10 +88,6 @@ type ScopeConfiguration struct {
 	// If true, passes the given request to the next middleware
 	// which could respond with an Error of its own, poorly obscuring where this plugin is used.
 	SilenceAuthErrors bool
-
-	// The user must set a "flag of shame" for sites that don't use TLS with 'upload'. (read-only)
-	// This keeps track of whether said flags has been set.
-	AcknowledgedNoTLS bool
 
 	// This basically disables everything except POST and PUT.
 	DisableWebdav bool
@@ -222,7 +200,8 @@ func parseCaddyConfig(c *caddy.Controller) (*HandlerConfiguration, error) {
 			case "silent_auth_errors":
 				config.SilenceAuthErrors = true
 			case "yes_without_tls":
-				config.AcknowledgedNoTLS = true
+				// deprecated
+				// nop
 			case "disable_webdav":
 				config.DisableWebdav = true
 			case "filenames_form":
