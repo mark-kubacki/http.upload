@@ -11,7 +11,7 @@ stages:
 - benchmarks
 
 .go_depends_template: &get_dependencies
-  image: "hub.blitznote.com:4567/src/go:1.9"
+  image: "hub.blitznote.com:4567/src/go:1.10"
   before_script:
   - mkdir -p _vendor-cache /var/go/ours
   - ln -s "$(pwd -P)/_vendor-cache" /var/go/theirs
@@ -98,7 +98,7 @@ replay_example:
   stage: integration_test
   dependencies:
   - compile_ecaddy
-  image: blitznote/debootstrap-amd64:16.04
+  image: blitznote/debase:16.04
   script:
   - cd _debug
   - printf 'localhost:8000\n\nupload /web/path {\n  to "/var/tmp"\n}\n' | tee Caddyfile
@@ -122,7 +122,7 @@ image_upload_example:
   stage: integration_test
   dependencies:
   - compile_ecaddy
-  image: blitznote/debootstrap-amd64:16.04
+  image: blitznote/debase:16.04
   script:
   - cd _debug
   - printf 'localhost:8001\n\nupload /web/path {\n  to "/var/tmp"\n  random_suffix_len 4\n}\n' | tee Caddyfile
@@ -140,7 +140,7 @@ upload_using_put:
   when: manual
   dependencies:
   - compile_ecaddy
-  image: blitznote/debootstrap-amd64:16.04
+  image: blitznote/debase:16.04
   script:
   - cd _debug
   - printf 'localhost:8000\n\nupload /web/path {\n  to "/var/tmp"\n}\n' | tee Caddyfile
@@ -164,7 +164,7 @@ upload_multipart:
   when: manual
   dependencies:
   - compile_ecaddy
-  image: blitznote/debootstrap-amd64:16.04
+  image: blitznote/debase:16.04
   script:
   - cd _debug
   - printf 'localhost:8000\n\nupload /web/path {\n  to "/var/tmp"\n}\n' | tee Caddyfile
