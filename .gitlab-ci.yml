@@ -34,7 +34,7 @@ stages:
   - go get -d -t ./...
   - mv /var/go/theirs/src/{blitznote.com,plugin.hosting} /var/go/ours/src/ 2>/dev/null || true
   cache:
-    key: "go/$CI_COMMIT_REF_NAME"
+    key: "caddy-$CI_COMMIT_REF_NAME"
     policy: pull
     paths:
     - _vendor-cache/
@@ -46,7 +46,7 @@ get_dependencies:
   script:
   - du -sh _vendor-cache
   cache:
-    key: "go/$CI_COMMIT_REF_NAME"
+    key: "caddy-$CI_COMMIT_REF_NAME"
     policy: pull-push
     paths:
     - _vendor-cache/
@@ -89,7 +89,8 @@ compile_ecaddy:
   - cp -a /usr/bin/cmp "$GODIR"/_debug/
   - sed -i -e '/caddy.upload/d' "$CADDYDIR"/caddy/caddymain/run.go
   artifacts:
-    expire_in: 3 days
+    expire_in: 8 days
+    name: "caddy-$CI_COMMIT_REF_NAME"
     paths:
     - _debug/
 
