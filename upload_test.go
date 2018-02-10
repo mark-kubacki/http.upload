@@ -143,6 +143,30 @@ func TestUpload_ServeHTTP(t *testing.T) {
 			compareContents(filepath.Join(scratchDir, tempFName), []byte("DELME"))
 		})
 
+		Convey("succeeds with an empty file", func() {
+			tempFName := tempFileName()
+			req, err := http.NewRequest("PUT", "/"+tempFName, strings.NewReader(""))
+			if err != nil {
+				t.Fatal(err)
+			}
+			req.Header.Set("Content-Length", "0")
+			defer func() {
+				os.Remove(filepath.Join(scratchDir, tempFName))
+			}()
+
+			code, err := h.ServeHTTP(w, req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			So(code, ShouldEqual, 201)
+
+			fileStat, err := os.Stat(filepath.Join(scratchDir, tempFName))
+			if err != nil {
+				t.Fatal(err)
+			}
+			So(fileStat.Size(), ShouldEqual, 0)
+		})
+
 		Convey("responds with a correct Location with one uploaded file", func() {
 			tempFName := tempFileName()
 			req, err := http.NewRequest("PUT", "/subdir/"+tempFName, strings.NewReader("DELME"))

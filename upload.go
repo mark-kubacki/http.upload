@@ -157,7 +157,7 @@ inScope:
 		if r.Header.Get("Content-Length") != "" { // unfortunately, sending this header is optional
 			var perr error
 			expectBytes, perr = strconv.ParseUint(r.Header.Get("Content-Length"), 10, 64)
-			if perr != nil || expectBytes <= 0 {
+			if perr != nil || expectBytes < 0 {
 				return http.StatusBadRequest, errLengthInvalid
 			}
 			if writeQuota > 0 && expectBytes > writeQuota { // XXX(mark): skip this check if sparse files are allowed
@@ -223,7 +223,7 @@ func (h *Handler) ServeMultipartUpload(w http.ResponseWriter, r *http.Request,
 		var expectBytes uint64
 		if part.Header.Get("Content-Length") != "" {
 			expectBytes, err = strconv.ParseUint(part.Header.Get("Content-Length"), 10, 64)
-			if err != nil || expectBytes <= 0 {
+			if err != nil || expectBytes < 0 {
 				return http.StatusBadRequest, errLengthInvalid
 			}
 			if writeQuota > 0 && expectBytes > writeQuota { // XXX(mark): sparse files would need this
