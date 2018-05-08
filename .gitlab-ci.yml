@@ -77,10 +77,18 @@ compile_ecaddy:
   <<: *get_dependencies
   script:
   - sed -i -e '/This is where other plugins/a \\t_ "blitznote.com/src/caddy.upload"' "$CADDYDIR"/caddy/caddymain/run.go
-  - cd "$CADDYDIR"/caddy
+  - sed -i
+      -e '/ClientHelloTelemetry = true/s@true@false@'
+      "$CADDYDIR"/caddytls/handshake.go
   - export pkg="github.com/mholt/caddy/caddy/caddymain"
+  - if grep -q -F enableTelemetry "$CADDYDIR"/caddy/caddymain/run.go; then
+      export andflags=" -X '${pkg}.enableTelemetry=false'";
+    else
+      export andflags="";
+    fi
+  - cd "$CADDYDIR"/caddy
   - go build
-      -ldflags  "-s -w -buildid '' -X '${pkg}.gitTag=$(git describe --exact-match HEAD 2>/dev/null)'"
+      -ldflags  "-s -w -buildid '' -X '${pkg}.gitTag=$(git describe --exact-match HEAD 2>/dev/null)'${andflags}"
       -asmflags "-trimpath=${GOPATH}"
       -gcflags  "-trimpath=${GOPATH}"
       -o ecaddy.upload~$(dpkg --print-architecture)
