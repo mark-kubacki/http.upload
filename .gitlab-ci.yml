@@ -71,9 +71,8 @@ unittests:
   script:
   - go test -v ./...
 
-compile_ecaddy:
+.caddy_compile_template: &howto_compile
   stage: build
-  when: always
   <<: *get_dependencies
   script:
   - sed -i -e '/This is where other plugins/a \\t_ "blitznote.com/src/caddy.upload"' "$CADDYDIR"/caddy/caddymain/run.go
@@ -96,9 +95,32 @@ compile_ecaddy:
   - mkdir -p "$GODIR"/_debug && mv ecaddy.upload~$(dpkg --print-architecture) $_
   - cp -a /usr/bin/cmp "$GODIR"/_debug/
   - sed -i -e '/caddy.upload/d' "$CADDYDIR"/caddy/caddymain/run.go
+
+compile_ecaddy:
+  <<: *howto_compile
+  when: always
   artifacts:
     expire_in: 8 days
     name: "caddy-$CI_COMMIT_REF_NAME"
+    paths:
+    - _debug/
+
+compile:vanilla_go:
+  <<: *howto_compile
+  image: "docker.io/blitznote/golang:latest"
+  artifacts:
+    expire_in: 2 days
+    name: "caddy-vanilla-go-$CI_COMMIT_REF_NAME"
+    paths:
+    - _debug/
+
+compile:go_tip:
+  <<: *howto_compile
+  image: "hub.blitznote.com:4567/src/go:head"
+  allow_failure: true
+  artifacts:
+    expire_in: 2 days
+    name: "caddy-go-tip-$CI_COMMIT_REF_NAME"
     paths:
     - _debug/
 
