@@ -16,6 +16,11 @@ const (
 
 	// Defined here to avoid the import of "math", and needed in file allocation functions.
 	maxInt64 = 1<<63 - 1
+
+	// Following bitmasks, traditionally denoted in octal, represent the values hard-coded in Golang
+	// that are used by default for creating files and directories. The 'umask' is always applied implicitly.
+	permBitsDir  = os.ModePerm                      // -rwxrwxrwx
+	permBitsFile = os.ModePerm & ^os.FileMode(0111) // -rw-rw-rw-
 )
 
 // ProtoFileBehaver is implemented by all variants of ProtoFile.
@@ -50,7 +55,7 @@ var IntentNew func(path, filename string) (*ProtoFileBehaver, error) = intentNew
 type generalizedProtoFile ProtoFile
 
 func intentNewUniversal(path, filename string) (*ProtoFileBehaver, error) {
-	err := os.MkdirAll(path, 0750)
+	err := os.MkdirAll(path, permBitsDir)
 	if err != nil {
 		return nil, err
 	}

@@ -22,11 +22,11 @@ func init() {
 type unixProtoFile ProtoFile
 
 func intentNewUnix(path, filename string) (*ProtoFileBehaver, error) {
-	err := os.MkdirAll(path, 0750)
+	err := os.MkdirAll(path, permBitsDir)
 	if err != nil {
 		return nil, err
 	}
-	t, err := os.OpenFile(path, os.O_WRONLY|unix.O_TMPFILE, 0600)
+	t, err := os.OpenFile(path, os.O_WRONLY|unix.O_TMPFILE, permBitsFile)
 	// did it fail because…
 	if err != nil {
 		perr, ok := err.(*os.PathError)
