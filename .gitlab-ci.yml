@@ -139,7 +139,7 @@ replay_example:
   - ./cmp -b /etc/hostname /var/tmp/hostname
   - ./cmp -b /etc/resolv.conf /var/tmp/resolv.conf
   - 'curl -X MOVE -H "Destination: /web/path/to-release" http://localhost:8000/web/path/from-release && test -s /var/tmp/to-release'
-  - curl -X DELETE http://localhost:8000/web/path/to-release
+  - curl -vX DELETE http://localhost:8000/web/path/to-release
 
 # Results in a directory and the uploaded file.
   - curl -T /etc/os-release http://localhost:8000/web/path/subdir/os-release && test -s /var/tmp/subdir/os-release

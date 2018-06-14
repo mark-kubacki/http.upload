@@ -320,7 +320,7 @@ func (h *Handler) MoveOneFile(scope string, config *ScopeConfiguration,
 // DeleteOneFile deletes from disk like "rm -r" and is used with HTTP DELETE.
 // The term 'file' includes directories.
 //
-// Returns 200 (StatusOK) if the file did not exist ex ante.
+// Returns 204 (StatusNoContent) if the file did not exist ex ante.
 func (h *Handler) DeleteOneFile(scope string, config *ScopeConfiguration, fileName string) (int, error) {
 	path, fname, err := h.translateForFilesystem(scope, fileName, config)
 	if err != nil {
