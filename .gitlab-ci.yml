@@ -77,6 +77,11 @@ unittests:
   script:
   - sed -i -e '/This is where other plugins/a \\t_ "blitznote.com/src/caddy.upload"' "$CADDYDIR"/caddy/caddymain/run.go
   - sed -i
+      -e '/http.SetCookie/a \\t\tw.Header().Set("Vary", "Cookie")'
+      -e '/acceptHeader :=/i \\tw.Header().Set("Cache-Control", "max-age=60, s-maxage=120, proxy-revalidate, stale-while-revalidate=600")'
+      "$CADDYDIR"/caddyhttp/browse/browse.go
+
+  - sed -i
       -e '/ClientHelloTelemetry = true/s@true@false@'
       "$CADDYDIR"/caddytls/handshake.go
   - export pkg="github.com/mholt/caddy/caddy/caddymain"
@@ -85,6 +90,8 @@ unittests:
     else
       export andflags="";
     fi
+
+  - git diff || true
   - cd "$CADDYDIR"/caddy
   - go build
       -ldflags  "-s -w -buildid '' -X '${pkg}.gitTag=$(git describe --exact-match HEAD 2>/dev/null)'${andflags}"
