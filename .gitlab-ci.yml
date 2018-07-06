@@ -81,6 +81,15 @@ unittests:
       -e '/acceptHeader :=/i \\tw.Header().Set("Cache-Control", "max-age=60, s-maxage=120, proxy-revalidate, stale-while-revalidate=600")'
       "$CADDYDIR"/caddyhttp/browse/browse.go
 
+# In case this is not vanilla Go, add DHE cipher suites and remove non-PFS ones from any defaults' lists.
+  - if grep -q -m 1 -F "TLS_DHE" "$(go env GOROOT)/src/crypto/tls/cipher_suites.go"; then
+      sed -i
+        -e '/^var SupportedCiphersMap/a \\t"DHE-RSA-AES128-GCM-SHA256":\ttls.TLS_DHE_RSA_WITH_AES_128_GCM_SHA256,\n\t"DHE-RSA-AES256-GCM-SHA384":\ttls.TLS_DHE_RSA_WITH_AES_256_GCM_SHA384,\n\t"DHE-RSA-AES128-CBC-SHA256":\ttls.TLS_DHE_RSA_WITH_AES_128_CBC_SHA256,\n\t"DHE-RSA-AES256-CBC-SHA256":\ttls.TLS_DHE_RSA_WITH_AES_256_CBC_SHA256,\n\t"DHE-RSA-AES128-CBC-SHA":\ttls.TLS_DHE_RSA_WITH_AES_128_CBC_SHA,\n\t"DHE-RSA-AES256-CBC-SHA":\ttls.TLS_DHE_RSA_WITH_AES_256_CBC_SHA,'
+        -e '/^var default/,/^}$/{/TLS_RSA/d}'
+        "$CADDYDIR"/caddytls/config.go;
+      gofmt -w "$CADDYDIR"/caddytls/config.go;
+    fi
+
   - sed -i
       -e '/ClientHelloTelemetry = true/s@true@false@'
       "$CADDYDIR"/caddytls/handshake.go
@@ -91,6 +100,7 @@ unittests:
       export andflags="";
     fi
 
+  - cd "$CADDYDIR"
   - git diff || true
   - cd "$CADDYDIR"/caddy
   - go build
