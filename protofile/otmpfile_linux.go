@@ -107,5 +107,20 @@ func (p unixProtoFile) SizeWillBe(numBytes uint64) error {
 	if err != nil {
 		return err
 	}
-	return syscall.Fallocate(fd, 0, maxInt64, int64(numBytes-maxInt64))
+
+	err = syscall.Fallocate(fd, 0, maxInt64, int64(numBytes-maxInt64))
+	if err != nil {
+		return err
+	}
+
+	// These are best-efford, so we don't care about any errors.
+	// For very large files this is not optimal, but covers most of use-cases for now.
+	if numBytes <= maxInt64 {
+		_ = unix.Fadvise(fd, 0, int64(numBytes), unix.FADV_WILLNEED)
+		_ = unix.Fadvise(fd, 0, int64(numBytes), unix.FADV_SEQUENTIAL)
+	} else {
+		_ = unix.Fadvise(fd, 0, maxInt64, unix.FADV_WILLNEED)
+		_ = unix.Fadvise(fd, 0, maxInt64, unix.FADV_SEQUENTIAL)
+	}
+	return nil
 }
