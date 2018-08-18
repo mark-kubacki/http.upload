@@ -97,8 +97,12 @@ func (p unixProtoFile) SizeWillBe(numBytes uint64) error {
 		if err == syscall.EOPNOTSUPP {
 			return nil
 		}
+
+		_ = unix.Fadvise(fd, 0, int64(numBytes), unix.FADV_WILLNEED)
+		_ = unix.Fadvise(fd, 0, int64(numBytes), unix.FADV_SEQUENTIAL)
 		return err
 	}
+
 	// Yes, every Exbibyte counts.
 	err := syscall.Fallocate(fd, 0, 0, maxInt64)
 	if err == syscall.EOPNOTSUPP {
@@ -115,12 +119,7 @@ func (p unixProtoFile) SizeWillBe(numBytes uint64) error {
 
 	// These are best-efford, so we don't care about any errors.
 	// For very large files this is not optimal, but covers most of use-cases for now.
-	if numBytes <= maxInt64 {
-		_ = unix.Fadvise(fd, 0, int64(numBytes), unix.FADV_WILLNEED)
-		_ = unix.Fadvise(fd, 0, int64(numBytes), unix.FADV_SEQUENTIAL)
-	} else {
-		_ = unix.Fadvise(fd, 0, maxInt64, unix.FADV_WILLNEED)
-		_ = unix.Fadvise(fd, 0, maxInt64, unix.FADV_SEQUENTIAL)
-	}
-	return nil
+	_ = unix.Fadvise(fd, 0, maxInt64, unix.FADV_WILLNEED)
+	_ = unix.Fadvise(fd, 0, maxInt64, unix.FADV_SEQUENTIAL)
+	return err
 }
