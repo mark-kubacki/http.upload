@@ -17,8 +17,9 @@ func init() {
 }
 
 // unixProtoFile is the variant that utilizes O_TMPFILE.
-// Although it might seem that data is written to the parent directory itself,
-// it actually goes into a nameless file.
+// Although it might seem as if we write data to a directory,
+// it actually goes to a nameless file in said directory.
+// The file gets discarded by the OS should it remain without a name but get closed.
 type unixProtoFile ProtoFile
 
 func intentNewUnix(path, filename string) (*ProtoFileBehaver, error) {
@@ -26,7 +27,7 @@ func intentNewUnix(path, filename string) (*ProtoFileBehaver, error) {
 	if err != nil {
 		return nil, err
 	}
-	t, err := os.OpenFile(path, os.O_WRONLY|unix.O_TMPFILE, permBitsFile)
+	t, err := os.OpenFile(path, os.O_WRONLY|unix.O_TMPFILE|syscall.O_CLOEXEC, permBitsFile)
 	// did it fail because…
 	if err != nil {
 		perr, ok := err.(*os.PathError)
