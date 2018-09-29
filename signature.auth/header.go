@@ -12,8 +12,6 @@ import (
 	"strings"
 	"text/scanner"
 	"time"
-
-	"plugin.hosting/go/abs"
 )
 
 // Used in errors that are returned when parsing a malformed "Authorization" header.
@@ -122,7 +120,7 @@ func (a *AuthorizationHeader) CheckFormal(headers http.Header, timestampRecv, ti
 				timestampThen = uint64(t.Unix())
 			}
 
-			if abs.Abs64(int64(timestampRecv-timestampThen)) > timeTolerance {
+			if abs64(int64(timestampRecv-timestampThen)) > timeTolerance {
 				return errRequestTooOld
 			}
 		}
