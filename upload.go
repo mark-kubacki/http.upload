@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"blitznote.com/src/caddy.upload/protofile"
 	"blitznote.com/src/caddy.upload/signature.auth"
+	"blitznote.com/src/protofile"
 	"github.com/mholt/caddy/caddyhttp/httpserver"
 	"github.com/pkg/errors"
 	"golang.org/x/text/unicode/norm"
