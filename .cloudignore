@@ -1,0 +1,3 @@
+.cloudignore
+.git*
+#!include:.gitignore

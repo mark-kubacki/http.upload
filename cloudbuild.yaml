@@ -1,0 +1,178 @@
+# It's handy to later browse the logs trying to learn if an error is common to all runs of a language.
+tags: ['golang', 'caddy', 'plugin']
+# Makes it easier to repurpose this file.
+substitutions:
+  _PROJECT_ROOT: 'blitznote.com/src/caddy.upload'
+# Admittedly rather cumbersome, but I've a public fork of caddy of my own (also on Github).
+  _CADDY_ORIGIN: 'github.com/mholt/caddy'
+  _CADDY_FLAVOR: 'mholt/caddy'
+
+# Google's default image lacks some tools I frequently use.
+# Therefore steps don't start like this:
+#  name: 'gcr.io/cloud-builders/go'
+#  env: ['PROJECT_ROOT=${_PROJECT_ROOT}']
+
+steps:
+# 'gofmt' only cares for the format, and doesn't touch any dependencies.
+# It's a nice gatekeeper before any downloads, and to date any recent Go version will do.
+- name: 'gcr.io/cloud-builders/go:debian'
+  id: 'gofmt'
+  entrypoint: 'bash'
+  args: ['-c', 'diff <(echo -n) <(gofmt -s -d $(find . -type f -name "*.go" -not -path "./_*"))']
+
+# Usually you'd go about this differently, for instance in hooks:
+#   gofiles=$(git diff --cached --name-only --diff-filter=ACM "${origin}/master" | grep '\.go$')
+#   gofmt -l $gofiles
+
+# Technically this is not needed, but I pay attention to timings below and like this to be excluded.
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['pull', 'blitznote/golang']
+
+# You could skip this step, but I don't want to run checks against latest Caddyserver.
+# Instead, what I will use is the latest release (including any beta) to limit the amount of code to review in case of a failed build.
+- name: 'blitznote/golang'
+  volumes:
+  - name: 'third-party-sources'
+    path: '/var/go/theirs'
+  env: ['GOPATH=/var/go/theirs:/go:/usr/share/gocode']
+  dir: '/go/src/${_PROJECT_ROOT}'
+  id: 'get caddy'
+  args:
+  - -c
+  - |
+    mkdir -p "/var/go/theirs/src/${_CADDY_ORIGIN}";
+    cd $$_;
+    export RELEASE="$(curl --compressed --fail --location --silent "https://api.github.com/repos/${_CADDY_FLAVOR}/releases/latest" | jq -r '.tag_name')";
+    export COMMIT="$(curl --compressed --fail --location --silent "https://api.github.com/repos/${_CADDY_FLAVOR}/tags" | jq -r ".[] | select(.name == \"$${RELEASE}\").commit.sha")";
+
+    git init .;
+    git remote add origin "https://${_CADDY_ORIGIN}.git";
+    git fetch origin "$${COMMIT}";
+    git reset --hard FETCH_HEAD;
+    
+    go get -v -d ./...;
+    printf "$${RELEASE}" >VERSION;
+    printf "=> ${_CADDY_ORIGIN} is $${RELEASE}\n"
+
+# Now get dependencies of this plugin.
+- &use_go
+  name: 'blitznote/golang'
+  volumes:
+  - name: 'third-party-sources'
+    path: '/var/go/theirs'
+  env: ['GOPATH=/var/go/theirs:/go:/usr/share/gocode']
+  dir: '/go/src/${_PROJECT_ROOT}'
+  id: 'get dependencies'
+  args: ['go', 'get', '-d', '-t', './...']
+
+# Now come steps (in Gitlab this were one stage actually) common to most projects written in Golang.
+# Ideally run parallel.
+- <<: *use_go
+  id: 'vet'
+  waitFor: ['get dependencies']
+  args: ['go', 'vet', './...']
+- <<: *use_go
+  id: 'ineffassign'
+  waitFor: ['get dependencies']
+  args: ['ineffassign', '.']
+- <<: *use_go
+  id: 'lint'
+  waitFor: ['get dependencies']
+  args: ['golint', './...']
+- <<: *use_go
+  id: 'unittests'
+  waitFor: ['get dependencies']
+  args: ['go', 'test', '-v', './...']
+
+# Build, but discard any artifacts.
+- <<: *use_go
+  id: 'inject plugin'
+  args:
+  - -c
+  - |
+    cd "/var/go/theirs/src/${_CADDY_ORIGIN}";
+    sed -i \
+      -e '/This is where other plugins/a \\t_ "blitznote.com/src/caddy.upload"' \
+      caddy/caddymain/run.go;
+
+- &build_go
+  <<: *use_go
+  name: 'blitznote/golang:1.11'
+  waitFor: ['inject plugin']
+  id: 'build linux amd64, Go current'
+  env: ['GOPATH=/var/go/theirs:/go:/usr/share/gocode', 'GOARCH=amd64', 'GOOS=linux']
+  args:
+  - -c
+  - |
+    cd "/var/go/theirs/src/${_CADDY_ORIGIN}";
+    export pkg="${_CADDY_ORIGIN}/caddy/caddymain";
+    cd caddy;
+    go build \
+      -ldflags  "-s -w -buildid '' -X '$${pkg}.gitTag=$(cat ../VERSION)'" \
+      -asmflags "-trimpath=$${GOPATH}" \
+      -gcflags  "-trimpath=$${GOPATH}" \
+      -o caddy.upload~$${GOARCH}_$${GOOS};
+    if [[ "$${GOOS}" == "linux" ]] && [[ "$${GOARCH}" == "$(dpkg --print-architecture)" ]]; then ./caddy.upload~$${GOARCH}_$${GOOS} -version; fi;
+    mv caddy.upload~$${GOARCH}_$${GOOS} /workspace/
+
+# I used to compile this with different versions of Go, but see no benefit.
+#- <<: *build_go
+#  name: 'blitznote/golang:1.10'
+#  id: 'build linux amd64, Go previous'
+#- <<: *build_go
+#  name: 'blitznote/golang:1.12'
+#  id: 'build linux amd64, Go tip'
+
+#- <<: *build_go
+#  id: 'build_windows_amd64'
+#  env: ['GOPATH=/var/go/theirs:/go:/usr/share/gocode', 'GOARCH=amd64', 'GOOS=windows']
+
+# Now come integration tests.
+- name: 'blitznote/debase:16.04'
+  waitFor: ['build linux amd64, Go current']
+  id: 'integration test, example from doc'
+  entrypoint: 'bash'
+  args:
+  - -c
+  - |
+    cd "$(mktemp -d)";
+    printf 'localhost:8000\n\nupload /web/path {\n  to "/var/tmp"\n}\n' | tee Caddyfile;
+    set -eux;
+    /workspace/caddy.upload~amd64_linux & sleep 0.2;
+
+    curl -sfS -T /etc/os-release http://localhost:8000/web/path/from-release && test -s /var/tmp/from-release;
+    curl -sfS -F hostname=@/etc/hostname -F resolv.txt=@/etc/resolv.conf http://localhost:8000/web/path/;
+    cmp -b /etc/hostname /var/tmp/hostname;
+    cmp -b /etc/resolv.conf /var/tmp/resolv.conf;
+    curl -sfS -X MOVE -H "Destination: /web/path/to-release" http://localhost:8000/web/path/from-release && test -s /var/tmp/to-release;
+    curl -sfS -vX DELETE http://localhost:8000/web/path/to-release;
+
+    curl -sfS -T /etc/os-release http://localhost:8000/web/path/subdir/os-release && test -s /var/tmp/subdir/os-release;
+    rm -f /var/tmp/subdir/os-release;
+    rmdir /var/tmp/subdir;
+
+    kill %1
+
+- name: 'blitznote/debase:16.04'
+  waitFor: ['build linux amd64, Go current']
+  id: 'integration test, image upload'
+  entrypoint: 'bash'
+  args:
+  - -c
+  - |
+    cd "$(mktemp -d)";
+    printf 'localhost:8000\n\nupload /web/path {\n  to "/var/tmp"\n  random_suffix_len 4\n}\n' | tee Caddyfile;
+    set -eux;
+    /workspace/caddy.upload~amd64_linux & sleep 0.2;
+
+    truncate --size $[ 1*1024*1024 ] image1.jpg;
+    curl -sfST image1.jpg http://localhost:8000/web/path/first-image.jpg;
+    ls -1 /var/tmp/*.jpg;
+    test -s /var/tmp/first-image_????.jpg;
+
+    kill %1
+
+#artifacts:
+#  objects:
+#    location: 'gs://some-bucket/some-dir/'
+#    paths: ['caddy.upload~*']
