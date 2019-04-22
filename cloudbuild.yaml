@@ -12,6 +12,8 @@ substitutions:
 #  name: 'gcr.io/cloud-builders/go'
 #  env: ['PROJECT_ROOT=${_PROJECT_ROOT}']
 
+# Please note, image docker.io/blitznote/golang is also *gcr.io/blitznote/golang .
+
 steps:
 # 'gofmt' only cares for the format, and doesn't touch any dependencies.
 # It's a nice gatekeeper before any downloads, and to date any recent Go version will do.
@@ -26,11 +28,11 @@ steps:
 
 # Technically this is not needed, but I pay attention to timings below and like this to be excluded.
 - name: 'gcr.io/cloud-builders/docker'
-  args: ['pull', 'blitznote/golang']
+  args: ['pull', 'docker.io/blitznote/golang']
 
 # You could skip this step, but I don't want to run checks against latest Caddyserver.
 # Instead, what I will use is the latest release (including any beta) to limit the amount of code to review in case of a failed build.
-- name: 'blitznote/golang'
+- name: 'docker.io/blitznote/golang'
   volumes:
   - name: 'third-party-sources'
     path: '/var/go/theirs'
@@ -56,7 +58,7 @@ steps:
 
 # Now get dependencies of this plugin.
 - &use_go
-  name: 'blitznote/golang'
+  name: 'docker.io/blitznote/golang'
   volumes:
   - name: 'third-party-sources'
     path: '/var/go/theirs'
@@ -97,7 +99,7 @@ steps:
 
 - &build_go
   <<: *use_go
-  name: 'blitznote/golang:1.11'
+  name: 'docker.io/blitznote/golang'
   waitFor: ['inject plugin']
   id: 'build linux amd64, Go current'
   env: ['GOPATH=/var/go/theirs:/go:/usr/share/gocode', 'GOARCH=amd64', 'GOOS=linux']
@@ -117,10 +119,10 @@ steps:
 
 # I used to compile this with different versions of Go, but see no benefit.
 #- <<: *build_go
-#  name: 'blitznote/golang:1.10'
+#  name: 'docker.io/blitznote/golang:1.10'
 #  id: 'build linux amd64, Go previous'
 #- <<: *build_go
-#  name: 'blitznote/golang:1.12'
+#  name: 'docker.io/blitznote/golang:1.12'
 #  id: 'build linux amd64, Go tip'
 
 #- <<: *build_go
@@ -128,7 +130,7 @@ steps:
 #  env: ['GOPATH=/var/go/theirs:/go:/usr/share/gocode', 'GOARCH=amd64', 'GOOS=windows']
 
 # Now come integration tests.
-- name: 'blitznote/debase:16.04'
+- name: 'docker.io/blitznote/debase:16.04'
   waitFor: ['build linux amd64, Go current']
   id: 'integration test, example from doc'
   entrypoint: 'bash'
@@ -153,7 +155,7 @@ steps:
 
     kill %1
 
-- name: 'blitznote/debase:16.04'
+- name: 'docker.io/blitznote/debase:16.04'
   waitFor: ['build linux amd64, Go current']
   id: 'integration test, image upload'
   entrypoint: 'bash'

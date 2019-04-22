@@ -1,7 +1,6 @@
 Upload for Caddy
 ================
 
-[![build status](https://hub.blitznote.com/src/caddy.upload/badges/master/build.svg)](https://hub.blitznote.com/src/caddy.upload/pipelines)
 [![GoDoc](https://godoc.org/blitznote.com/src/caddy.upload?status.svg)](https://godoc.org/blitznote.com/src/caddy.upload)
 
 Enables you to upload files, such as build artifacts, to your Caddyserver instance.
