@@ -4,7 +4,6 @@
 package upload // import "blitznote.com/src/caddy.upload"
 
 import (
-	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -15,11 +14,6 @@ import (
 	"github.com/mholt/caddy"
 	"github.com/mholt/caddy/caddyhttp/httpserver"
 	"golang.org/x/text/unicode/norm"
-)
-
-const (
-	// Part of this is used to display a substitute for a version number of the plugin.
-	hashsumOfSetupSource = "$Id$"
 )
 
 func init() {
@@ -33,13 +27,6 @@ func init() {
 //
 // This is called by Caddy.
 func Setup(c *caddy.Controller) error {
-	if c.Dispenser.File() != "Testfile" {
-		log.Printf("Version of plugin 'upload': %s-%s-%s\n",
-			hashsumOfSetupSource[5:13],
-			hashsumOfUploadSource[5:13],
-			hashsumOfFilenameSource[5:13])
-	}
-
 	config, err := parseCaddyConfig(c)
 	if err != nil {
 		return err

@@ -27,9 +27,6 @@ const (
 	// and second, future versions will switch to blockwise writing, which is
 	// more efficient and necessary for some high-speed NICs (think: 10GbE+).
 	reportProgressEveryBytes = 1 << 15
-
-	// Part of this is used to display a substitute for a version number ofthe plugin.
-	hashsumOfUploadSource = "$Id$"
 )
 
 // Errors used in functions that resemble the core logic of this plugin.

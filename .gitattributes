@@ -1,6 +1,6 @@
 # Golang source code
-*.go          text eol=lf whitespace=blank-at-eol,blank-at-eof,space-before-tab,trailing-space,tabwidth=4 ident
-*.s           text eol=lf whitespace=blank-at-eol,blank-at-eof,space-before-tab,trailing-space,tabwidth=4 ident
+*.go          text eol=lf whitespace=blank-at-eol,blank-at-eof,space-before-tab,trailing-space,tabwidth=4
+*.s           text eol=lf whitespace=blank-at-eol,blank-at-eof,space-before-tab,trailing-space,tabwidth=4
 
 *.yml         text eol=lf whitespace=blank-at-eol,space-before-tab,tab-in-indent,trailing-space,tabwidth=2
 
