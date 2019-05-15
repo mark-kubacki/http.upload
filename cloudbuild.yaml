@@ -26,13 +26,42 @@ steps:
 #   gofiles=$(git diff --cached --name-only --diff-filter=ACM "${origin}/master" | grep '\.go$')
 #   gofmt -l $gofiles
 
+# It's always good to cache dependencies for network connections and third-party services can be subject to interruptions and outages.
+- name: 'gcr.io/cloud-builders/gsutil'
+  waitFor: ['gofmt']
+  volumes:
+  - name: 'third-party-sources'
+    path: '/var/go/theirs'
+  id: 'get cache'
+  entrypoint: 'bash'
+  args:
+  - -c
+  - |
+    export RELEASE="$$(curl --compressed --fail --location --silent "https://api.github.com/repos/${_CADDY_FLAVOR}/releases/latest" | grep -F tag_name | awk '{print $$2;}' | tr -d ',"')";
+    if gsutil cp gs://cache_cloudbuild/caddy/dependencies-$${RELEASE}.tar.xz ./; then
+      tar -C /var/go/theirs/ -xaf "dependencies-$${RELEASE}.tar.xz" && rm "dependencies-$${RELEASE}.tar.xz";
+    else
+      exit 0;
+    fi
+
 # Technically this is not needed, but I pay attention to timings below and like this to be excluded.
 - name: 'gcr.io/cloud-builders/docker'
-  args: ['pull', 'docker.io/blitznote/golang']
+  waitFor: ['gofmt']
+  id: 'get golang container image'
+  entrypoint: 'bash'
+  args:
+  - -c
+  - |
+    if docker pull gcr.io/blitznote/golang; then
+      docker tag gcr.io/blitznote/golang:latest docker.io/blitznote/golang:latest;
+    else
+      docker pull docker.io/blitznote/golang;
+    fi
 
 # You could skip this step, but I don't want to run checks against latest Caddyserver.
 # Instead, what I will use is the latest release (including any beta) to limit the amount of code to review in case of a failed build.
 - name: 'docker.io/blitznote/golang'
+  waitFor: ['get cache', 'get golang container image']
   volumes:
   - name: 'third-party-sources'
     path: '/var/go/theirs'
@@ -42,6 +71,11 @@ steps:
   args:
   - -c
   - |
+    if [ -s "/var/go/theirs/src/${_CADDY_ORIGIN}/VERSION" ]; then
+      sed -i -e '/caddy\.upload/d' "/var/go/theirs/src/${_CADDY_ORIGIN}/go.mod";
+      exit 0;
+    fi;
+    
     mkdir -p "/var/go/theirs/src/${_CADDY_ORIGIN}";
     cd $$_;
     export RELEASE="$(curl --compressed --fail --location --silent "https://api.github.com/repos/${_CADDY_FLAVOR}/releases/latest" | jq -r '.tag_name')";
@@ -187,7 +221,25 @@ steps:
 
     kill %1
 
+# Do not uncomment this as Google Cloud Build for Github lacks the permissions to perform this step.
+# Mark needs to issue the build separately, using a different account, for this to succeed.
+#- name: 'docker.io/blitznote/debase:16.04'
+#  waitFor: ['build linux amd64, Go current']
+#  id: 'store dependencies'
+#  volumes:
+#  - name: 'third-party-sources'
+#    path: '/var/go/theirs'
+#  entrypoint: 'bash'
+#  args:
+#  - -c
+#  - |
+#    tar -C /var/go/theirs/ --sort=name \
+#      --numeric-owner --owner=0 --group=0 \
+#      --no-acls --no-selinux --no-xattrs \
+#      --xz -cf "dependencies-$$(cat /var/go/theirs/src/${_CADDY_ORIGIN}/VERSION).tar.xz" \
+#        $$(ls -1 /var/go/theirs)
+
 #artifacts:
 #  objects:
-#    location: 'gs://some-bucket/some-dir/'
-#    paths: ['caddy.upload~*']
+#    location: 'gs://cache_cloudbuild/caddy/'
+#    paths: ['caddy.upload~*', 'dependencies-*']
