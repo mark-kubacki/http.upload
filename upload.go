@@ -15,7 +15,6 @@ import (
 
 	"blitznote.com/src/caddy.upload/signature.auth"
 	"blitznote.com/src/protofile"
-	"github.com/mholt/caddy/caddyhttp/httpserver"
 	"github.com/pkg/errors"
 	"golang.org/x/text/unicode/norm"
 )
@@ -49,16 +48,6 @@ type coreUploadError string
 // Error implements the error interface.
 func (e coreUploadError) Error() string { return string(e) }
 
-// Handler represents a configured instance of this plugin for uploads.
-//
-// If you want to use it outside of Caddy, then implement 'Next' as
-// something with method ServeHTTP and at least the same member variables
-// that you can find here.
-type Handler struct {
-	Next   httpserver.Handler
-	Config HandlerConfiguration
-}
-
 // getTimestamp returns the current time as unix timestamp.
 //
 // Do not inline this one: Mark overwrites it for his flavour of Go.
@@ -69,30 +58,17 @@ var getTimestamp = func(r *http.Request) uint64 {
 
 // ServeHTTP catches methods meant for file manipulation, else is a passthrough.
 // Directs HTTP methods and fields to the corresponding function calls.
-func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error) {
-	var (
-		scope  string // will be stripped later
-		config *ScopeConfiguration
-	)
-
-	switch r.Method {
-	case http.MethodPost, http.MethodPut, "COPY", "MOVE", "DELETE":
-		// iterate over the scopes in the order they have been defined
-		for _, scope = range h.Config.PathScopes {
-			if httpserver.Path(r.URL.Path).Matches(scope) {
-				config = h.Config.Scope[scope]
-				goto inScope
-			}
-		}
-	}
-	return h.Next.ServeHTTP(w, r)
-inScope:
+func (h *Handler) serveHTTP(w http.ResponseWriter, r *http.Request,
+	scope string,
+	config *ScopeConfiguration,
+	nextFn func(http.ResponseWriter, *http.Request) (int, error),
+) (int, error) {
 
 	if config.DisableWebdav {
 		switch r.Method {
 		case "COPY", "MOVE", "DELETE":
 			if config.SilenceAuthErrors {
-				return h.Next.ServeHTTP(w, r)
+				return nextFn(w, r)
 			}
 			return http.StatusMethodNotAllowed, errWebdavDisabled
 		}
@@ -105,7 +81,7 @@ inScope:
 
 			if config.SilenceAuthErrors {
 				log.Printf("[WARNING] upload/auth: Request not authorized: %v", err) // Caddy has no proper logging atm
-				return h.Next.ServeHTTP(w, r)
+				return nextFn(w, r)
 			}
 			resp := err.SuggestedResponseCode()
 			if resp == http.StatusUnauthorized {
@@ -178,7 +154,7 @@ inScope:
 		}
 		return retval, err
 	default:
-		return h.Next.ServeHTTP(w, r)
+		return nextFn(w, r)
 	}
 }
 

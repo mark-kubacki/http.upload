@@ -107,14 +107,14 @@ steps:
       go.mod;
     printf "\n\nreplace ${_CADDY_ORIGIN} => /var/go/theirs/src/${_CADDY_ORIGIN}\n" \
       >>go.mod;
-    go build . errors;
+    go build -tags "caddyserver0.9 caddyserver1.0" . errors;
 
 # Now come steps (in Gitlab this were one stage actually) common to most projects written in Golang.
 # Ideally run parallel.
 - <<: *use_go
   id: 'vet'
   waitFor: ['get dependencies']
-  args: ['go', 'vet', './...']
+  args: ['go', 'vet', '-tags', 'caddyserver0.9 caddyserver1.0', './...']
 - <<: *use_go
   id: 'ineffassign'
   waitFor: ['get dependencies']
@@ -126,7 +126,7 @@ steps:
 - <<: *use_go
   id: 'unittests'
   waitFor: ['get dependencies']
-  args: ['go', 'test', '-v', './...']
+  args: ['go', 'test', '-tags', 'caddyserver0.9 caddyserver1.0', '-v', './...']
 
 # Build, but discard any artifacts.
 - <<: *use_go
@@ -157,6 +157,7 @@ steps:
     export pkg="${_CADDY_ORIGIN}/caddy/caddymain";
     cd caddy;
     go build \
+      -tags "caddyserver0.9 caddyserver1.0" \
       -ldflags  "-s -w -buildid '' -X '$${pkg}.gitTag=$(cat ../VERSION)'" \
       -asmflags "-trimpath=$${GOPATH}" \
       -gcflags  "-trimpath=$${GOPATH}" \

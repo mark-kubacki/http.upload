@@ -1,9 +1,9 @@
-Upload for Caddy
-================
+Upload for HTTP servers
+=======================
 
-[![GoDoc](https://godoc.org/blitznote.com/src/caddy.upload?status.svg)](https://godoc.org/blitznote.com/src/caddy.upload)
+[![GoDoc](https://godoc.org/blitznote.com/src/http.upload?status.svg)](https://godoc.org/blitznote.com/src/http.upload)
 
-Enables you to upload files, such as build artifacts, to your Caddyserver instance.
+Enables you to upload files, such as build artifacts, to your HTTP server instance.
 
 Use this with the built-in authentication, or a different authentication plugin such as **jwt**.
 
@@ -21,12 +21,11 @@ Highlights
  * can be configured to silently discard unauthorized requests
  * (Linux only) files appear after having been written completely, not before
  * limits to file- and transaction sizes independent from any *transport encoding*
- * works with Caddy's **browse** plugin
 
 Warnings
 --------
 
-Upload using TLS, or your data and authorization tokens can be intercepted by
+Use TLS when uploading, or your data and authorization tokens can be intercepted by
 third parties and used against you.
 
 This plugin reveals some errors thrown by your filesystem implementation to the uploader,
@@ -37,6 +36,8 @@ in any files you are uploading being held in memory for the duration of the uplo
 
 Configuration Syntax
 --------------------
+
+Let this be a legible shorthand for instances of `ScopeConfiguration`:
 
 ```
 upload <path> {
@@ -116,7 +117,7 @@ Optional, but required if you want to use the built-in authorization feature:
 Tutorial
 --------
 
-Add to your Caddyfile:
+Setup a minimal configuration like this:
 
 ```
 upload /web/path {

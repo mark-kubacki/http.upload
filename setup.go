@@ -4,44 +4,12 @@
 package upload // import "blitznote.com/src/caddy.upload"
 
 import (
-	"os"
-	"strconv"
-	"strings"
 	"sync"
 	"unicode"
 
 	"blitznote.com/src/caddy.upload/signature.auth"
-	"github.com/mholt/caddy"
-	"github.com/mholt/caddy/caddyhttp/httpserver"
 	"golang.org/x/text/unicode/norm"
 )
-
-func init() {
-	caddy.RegisterPlugin("upload", caddy.Plugin{
-		ServerType: "http",
-		Action:     Setup,
-	})
-}
-
-// Setup configures an UploadHander instance.
-//
-// This is called by Caddy.
-func Setup(c *caddy.Controller) error {
-	config, err := parseCaddyConfig(c)
-	if err != nil {
-		return err
-	}
-
-	site := httpserver.GetConfig(c)
-	site.AddMiddleware(func(next httpserver.Handler) httpserver.Handler {
-		return &Handler{
-			Next:   next,
-			Config: *config,
-		}
-	})
-
-	return nil
-}
 
 // ScopeConfiguration represents the settings of a scope (URL path).
 type ScopeConfiguration struct {
@@ -89,157 +57,16 @@ type ScopeConfiguration struct {
 	RandomizedSuffixLength uint32
 }
 
-// HandlerConfiguration is the result of directives found in a 'Caddyfile'.
-//
-// Can be modified at runtime, except for values that are marked as 'read-only'.
-type HandlerConfiguration struct {
-	// Prefixes on which Caddy activates this plugin (read-only).
-	//
-	// Order matters because scopes can overlap.
-	PathScopes []string
-
-	// Maps scopes (paths) to their own and potentially differently configurations.
-	Scope map[string]*ScopeConfiguration
-}
-
-func parseCaddyConfig(c *caddy.Controller) (*HandlerConfiguration, error) {
-	siteConfig := &HandlerConfiguration{
-		PathScopes: make([]string, 0, 1),
-		Scope:      make(map[string]*ScopeConfiguration),
+// NewDefaultConfiguration creates a new default configuration.
+func NewDefaultConfiguration(targetDirectory string) *ScopeConfiguration {
+	cfg := ScopeConfiguration{
+		TimestampTolerance:     1 << 2,
+		WriteToPath:            targetDirectory,
+		UploadProgressCallback: noopUploadProgressCallback,
+		IncomingHmacSecrets:    make(auth.HmacSecrets),
 	}
 
-	for c.Next() {
-		config := ScopeConfiguration{}
-		config.TimestampTolerance = 1 << 2
-		config.IncomingHmacSecrets = make(auth.HmacSecrets)
-		config.UploadProgressCallback = noopUploadProgressCallback
-
-		scopes := c.RemainingArgs() // most likely only one path; but could be more
-		if len(scopes) == 0 {
-			return siteConfig, c.ArgErr()
-		}
-		siteConfig.PathScopes = append(siteConfig.PathScopes, scopes...)
-
-		for c.NextBlock() {
-			key := c.Val()
-			switch key {
-			case "to":
-				if !c.NextArg() {
-					return siteConfig, c.ArgErr()
-				}
-				// must be a directory
-				writeToPath := c.Val()
-				finfo, err := os.Stat(writeToPath)
-				if err != nil {
-					return siteConfig, c.Err(err.Error())
-				}
-				if !finfo.IsDir() {
-					return siteConfig, c.ArgErr()
-				}
-				config.WriteToPath = writeToPath
-			case "promise_download_from":
-				if !c.NextArg() {
-					return siteConfig, c.ArgErr()
-				}
-				config.ApparentLocation = c.Val()
-			case "hmac_keys_in":
-				keys := c.RemainingArgs()
-				if len(keys) == 0 {
-					return siteConfig, c.ArgErr()
-				}
-				err := config.IncomingHmacSecrets.Insert(keys)
-				if err != nil {
-					return siteConfig, c.Err(err.Error())
-				}
-			case "timestamp_tolerance":
-				if !c.NextArg() {
-					return siteConfig, c.ArgErr()
-				}
-				s, err := strconv.ParseUint(c.Val(), 10, 32)
-				if err != nil {
-					return siteConfig, c.Err(err.Error())
-				}
-				if s > 60 { // someone configured a ridiculously high exponent
-					return siteConfig, c.Err("we're sorry, but by this time Sol has already melted Terra")
-				}
-				if s > 32 {
-					return siteConfig, c.Err("must be ≤ 32")
-				}
-				config.TimestampTolerance = 1 << s
-			case "max_filesize":
-				if !c.NextArg() {
-					return siteConfig, c.ArgErr()
-				}
-				s, err := strconv.ParseUint(c.Val(), 10, 64)
-				if err != nil {
-					return siteConfig, c.Err(err.Error())
-				}
-				config.MaxFilesize = s
-			case "max_transaction_size":
-				if !c.NextArg() {
-					return siteConfig, c.ArgErr()
-				}
-				s, err := strconv.ParseUint(c.Val(), 10, 64)
-				if err != nil {
-					return siteConfig, c.Err(err.Error())
-				}
-				config.MaxTransactionSize = s
-			case "silent_auth_errors":
-				config.SilenceAuthErrors = true
-			case "yes_without_tls":
-				// deprecated
-				// nop
-			case "disable_webdav":
-				config.DisableWebdav = true
-			case "filenames_form":
-				if !c.NextArg() {
-					return siteConfig, c.ArgErr()
-				}
-				switch c.Val() {
-				case "NFC":
-					config.UnicodeForm = &struct{ Use norm.Form }{Use: norm.NFC}
-				case "NFD":
-					config.UnicodeForm = &struct{ Use norm.Form }{Use: norm.NFD}
-				case "none":
-					// nop
-				default:
-					return siteConfig, c.ArgErr()
-				}
-			case "filenames_in":
-				blocks := c.RemainingArgs()
-				if len(blocks) == 0 {
-					return siteConfig, c.ArgErr()
-				}
-				v, err := ParseUnicodeBlockList(strings.Join(blocks, " "))
-				if err != nil {
-					return siteConfig, c.Err(err.Error())
-				}
-				if v == nil {
-					return siteConfig, c.ArgErr()
-				}
-				config.RestrictFilenamesTo = []*unicode.RangeTable{v}
-			case "random_suffix_len":
-				if !c.NextArg() {
-					return siteConfig, c.ArgErr()
-				}
-				l, err := strconv.ParseUint(c.Val(), 10, 32)
-				if err != nil {
-					return siteConfig, c.Err(err.Error())
-				}
-				config.RandomizedSuffixLength = uint32(l)
-			}
-		}
-
-		if config.WriteToPath == "" {
-			return siteConfig, c.Errf("The destination path 'to' is missing")
-		}
-
-		for idx := range scopes {
-			siteConfig.Scope[scopes[idx]] = &config
-		}
-	}
-
-	return siteConfig, nil
+	return &cfg
 }
 
 // noopUploadProgressCallback NOP-functor, set as default.
