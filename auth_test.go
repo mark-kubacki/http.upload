@@ -1,7 +1,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package upload // import "blitznote.com/src/caddy.upload"
+package upload // import "blitznote.com/src/http.upload"
 
 import (
 	"crypto/hmac"

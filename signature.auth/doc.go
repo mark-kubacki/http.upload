@@ -29,4 +29,4 @@
 //    --header 'Authorization: …' \
 //    --header 'Timestamp: …' --header 'Token: …' \
 //    <filename> <url>
-package auth // import "blitznote.com/src/caddy.upload/signature.auth"
+package auth // import "blitznote.com/src/http.upload/signature.auth"

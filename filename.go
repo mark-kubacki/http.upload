@@ -3,7 +3,7 @@
 
 // Contains everything related to filename validation.
 
-package upload // import "blitznote.com/src/caddy.upload"
+package upload // import "blitznote.com/src/http.upload"
 
 import (
 	"crypto/rand"

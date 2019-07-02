@@ -1,7 +1,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package auth // import "blitznote.com/src/caddy.upload/signature.auth"
+package auth // import "blitznote.com/src/http.upload/signature.auth"
 
 import (
 	"net/http"

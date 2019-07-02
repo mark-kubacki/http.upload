@@ -3,7 +3,7 @@
 
 // +build caddyserver0.9 caddyserver1.0
 
-package upload // import "blitznote.com/src/caddy.upload"
+package upload // import "blitznote.com/src/http.upload"
 
 import (
 	"net/http"
@@ -12,7 +12,7 @@ import (
 	"strings"
 	"unicode"
 
-	"blitznote.com/src/caddy.upload/signature.auth"
+	"blitznote.com/src/http.upload/signature.auth"
 	"github.com/mholt/caddy"
 	"github.com/mholt/caddy/caddyhttp/httpserver"
 	"golang.org/x/text/unicode/norm"

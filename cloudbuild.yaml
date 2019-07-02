@@ -2,7 +2,7 @@
 tags: ['golang', 'caddy', 'plugin']
 # Makes it easier to repurpose this file.
 substitutions:
-  _PROJECT_ROOT: 'blitznote.com/src/caddy.upload'
+  _PROJECT_ROOT: 'blitznote.com/src/http.upload'
 # Admittedly rather cumbersome, but I've a public fork of caddy of my own (also on Github).
   _CADDY_ORIGIN: 'github.com/mholt/caddy'
   _CADDY_FLAVOR: 'mholt/caddy'
@@ -72,7 +72,7 @@ steps:
   - -c
   - |
     if [ -s "/var/go/theirs/src/${_CADDY_ORIGIN}/VERSION" ]; then
-      sed -i -e '/caddy\.upload/d' "/var/go/theirs/src/${_CADDY_ORIGIN}/go.mod";
+      sed -i -e '/caddy\.upload/d' -e '/http\.upload/d' "/var/go/theirs/src/${_CADDY_ORIGIN}/"{go.mod,caddyhttp/httpserver/plugin.go,caddy/caddymain/run.go};
       exit 0;
     fi;
     
@@ -102,6 +102,9 @@ steps:
   args:
   - -c
   - |
+    sed -i \
+      -e '/^require/a \\tgithub.com/mholt/caddy v1.0.0' \
+      go.mod;
     sed -i \
       -e '/caddy v/s@v[^ ]*$$@'$$(cat /var/go/theirs/src/${_CADDY_ORIGIN}/VERSION)'@' \
       go.mod;
@@ -136,13 +139,18 @@ steps:
   - |
     cd "/var/go/theirs/src/${_CADDY_ORIGIN}";
     sed -i \
-      -e '/^require/a\\tblitznote.com/src/caddy.upload v0.0.0' \
+      -e '/^require/a\\tblitznote.com/src/http.upload v0.0.0' \
       go.mod;
-    printf "\n\nreplace blitznote.com/src/caddy.upload => /go/src/blitznote.com/src/caddy.upload\n" \
+    printf "\n\nreplace blitznote.com/src/http.upload => /go/src/blitznote.com/src/http.upload\n" \
       >>go.mod;
     sed -i \
-      -e '/This is where other plugins/a \\t_ "blitznote.com/src/caddy.upload"' \
+      -e '/This is where other plugins/a \\t_ "blitznote.com/src/http.upload"' \
       caddy/caddymain/run.go;
+    if ! grep -qF '"upload"' caddyhttp/httpserver/plugin.go; then
+      sed -i \
+        -e '/"jwt"/a \\t"upload",' \
+        caddyhttp/httpserver/plugin.go;
+    fi
 
 - &build_go
   <<: *use_go
