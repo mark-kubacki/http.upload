@@ -101,17 +101,17 @@ func (h *Handler) serveHTTP(w http.ResponseWriter, r *http.Request,
 		if len(r.URL.Path) < 2 || destName == "" {
 			return http.StatusBadRequest, errNoDestination
 		}
-		return h.MoveOneFile(scope, config, r.URL.Path, destName)
+		return h.moveOneFile(scope, config, r.URL.Path, destName)
 	case "DELETE":
 		if len(r.URL.Path) < 2 {
 			return http.StatusBadRequest, errNoDestination
 		}
-		return h.DeleteOneFile(scope, config, r.URL.Path)
+		return h.deleteOneFile(scope, config, r.URL.Path)
 	case http.MethodPost:
 		ctype := r.Header.Get("Content-Type")
 		switch {
 		case strings.HasPrefix(ctype, "multipart/form-data"):
-			return h.ServeMultipartUpload(w, r, scope, config)
+			return h.serveMultipartUpload(w, r, scope, config)
 		case ctype != "": // other envelope formats, not implemented
 			return http.StatusUnsupportedMediaType, errUnknownEnvelopeFormat
 		}
@@ -138,9 +138,9 @@ func (h *Handler) serveHTTP(w http.ResponseWriter, r *http.Request,
 			}
 		}
 
-		bytesWritten, locationOnDisk, retval, err := h.WriteOneHTTPBlob(scope, config, r.URL.Path, expectBytes, writeQuota, r.Body)
+		bytesWritten, locationOnDisk, retval, err := h.writeOneHTTPBlob(scope, config, r.URL.Path, expectBytes, writeQuota, r.Body)
 		if writeQuota > 0 && bytesWritten > writeQuota {
-			// The partially uploaded file gets discarded by WriteOneHTTPBlob.
+			// The partially uploaded file gets discarded by writeOneHTTPBlob.
 			return http.StatusRequestEntityTooLarge, overQuotaErr
 		}
 
@@ -158,9 +158,9 @@ func (h *Handler) serveHTTP(w http.ResponseWriter, r *http.Request,
 	}
 }
 
-// ServeMultipartUpload is used on HTTP POST to explode a MIME Multipart envelope
+// serveMultipartUpload is used on HTTP POST to explode a MIME Multipart envelope
 // into one or more supplied files.
-func (h *Handler) ServeMultipartUpload(w http.ResponseWriter, r *http.Request,
+func (h *Handler) serveMultipartUpload(w http.ResponseWriter, r *http.Request,
 	scope string, config *ScopeConfiguration) (int, error) {
 	mr, err := r.MultipartReader()
 	if err != nil {
@@ -204,7 +204,7 @@ func (h *Handler) ServeMultipartUpload(w http.ResponseWriter, r *http.Request,
 			}
 		}
 
-		bytesWritten, locationOnDisk, retval, err := h.WriteOneHTTPBlob(scope, config, fileName, expectBytes, writeQuota, part)
+		bytesWritten, locationOnDisk, retval, err := h.writeOneHTTPBlob(scope, config, fileName, expectBytes, writeQuota, part)
 		bytesWrittenInTransaction += bytesWritten
 		if writeQuota > 0 && bytesWritten > writeQuota {
 			return http.StatusRequestEntityTooLarge, overQuotaErr
@@ -255,10 +255,10 @@ func (h *Handler) translateForFilesystem(scope, providedName string, config *Sco
 	return
 }
 
-// MoveOneFile corresponds to HTTP method MOVE, and renames a file or path.
+// moveOneFile corresponds to HTTP method MOVE, and renames a file or path.
 //
 // The destination filename is parsed as if it were an URL.Path.
-func (h *Handler) MoveOneFile(scope string, config *ScopeConfiguration,
+func (h *Handler) moveOneFile(scope string, config *ScopeConfiguration,
 	fromFilename, toFilename string) (int, error) {
 	frompath, fromname, err := h.translateForFilesystem(scope, fromFilename, config)
 	if err != nil {
@@ -290,11 +290,11 @@ func (h *Handler) MoveOneFile(scope string, config *ScopeConfiguration,
 	return http.StatusInternalServerError, errors.Wrap(err, "MOVE failed")
 }
 
-// DeleteOneFile deletes from disk like "rm -r" and is used with HTTP DELETE.
+// deleteOneFile deletes from disk like "rm -r" and is used with HTTP DELETE.
 // The term 'file' includes directories.
 //
 // Returns 204 (StatusNoContent) if the file did not exist ex ante.
-func (h *Handler) DeleteOneFile(scope string, config *ScopeConfiguration, fileName string) (int, error) {
+func (h *Handler) deleteOneFile(scope string, config *ScopeConfiguration, fileName string) (int, error) {
 	path, fname, err := h.translateForFilesystem(scope, fileName, config)
 	if err != nil {
 		return http.StatusUnprocessableEntity, err // 422: unprocessable entity
@@ -317,11 +317,11 @@ func (h *Handler) DeleteOneFile(scope string, config *ScopeConfiguration, fileNa
 	return http.StatusInternalServerError, errors.Wrap(err, "DELETE failed")
 }
 
-// WriteOneHTTPBlob handles HTTP PUT (and HTTP POST without envelopes),
-// writes one file to disk by adapting WriteFileFromReader to HTTP conventions.
+// writeOneHTTPBlob handles HTTP PUT (and HTTP POST without envelopes),
+// writes one file to disk by adapting writeFileFromReader to HTTP conventions.
 //
 // Returns |bytesWritten|, |locationOnDisk|, |suggestHTTPResponseCode|, error.
-func (h *Handler) WriteOneHTTPBlob(scope string, config *ScopeConfiguration, fileName string,
+func (h *Handler) writeOneHTTPBlob(scope string, config *ScopeConfiguration, fileName string,
 	expectBytes, writeQuota uint64, r io.Reader) (uint64, string, int, error) {
 	path, fname, err := h.translateForFilesystem(scope, fileName, config)
 	if err != nil {
@@ -342,7 +342,7 @@ func (h *Handler) WriteOneHTTPBlob(scope string, config *ScopeConfiguration, fil
 	if callback == nil {
 		callback = noopUploadProgressCallback
 	}
-	bytesWritten, err := WriteFileFromReader(path, fname, r, expectBytes, writeQuota, callback)
+	bytesWritten, err := writeFileFromReader(path, fname, r, expectBytes, writeQuota, callback)
 	locationOnDisk := filepath.Join(path, fname)
 	if err != nil && err != io.EOF {
 		if os.IsExist(err) || // gets thrown on a double race condition when using O_TMPFILE and linkat
@@ -362,7 +362,7 @@ func (h *Handler) WriteOneHTTPBlob(scope string, config *ScopeConfiguration, fil
 	return bytesWritten, locationOnDisk, http.StatusCreated, nil // 201: Created
 }
 
-// WriteFileFromReader implements an unit of work consisting of
+// writeFileFromReader implements an unit of work consisting of
 // • creation of a temporary file,
 // • writing to it,
 // • discarding it on failure ('zap') or
@@ -375,7 +375,7 @@ func (h *Handler) WriteOneHTTPBlob(scope string, config *ScopeConfiguration, fil
 //
 // With uploadProgressCallback:
 // The file has been successfully written if "error" remains 'io.EOF'.
-func WriteFileFromReader(path, filename string, r io.Reader, anticipatedSize, writeQuota uint64,
+func writeFileFromReader(path, filename string, r io.Reader, anticipatedSize, writeQuota uint64,
 	uploadProgressCallback func(uint64, error)) (uint64, error) {
 	wp, err := protofile.IntentNew(path, filename)
 	if err != nil {

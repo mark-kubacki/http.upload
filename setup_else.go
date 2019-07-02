@@ -16,7 +16,7 @@ import (
 //
 // 'next' is optional.
 // 'scope' is a string and the prefix of the upload destination's URL.Path, like `/dir/to/upload/destination`.
-func NewHandler(scope string, config *ScopeConfiguration, next http.Handler) (http.Handler, error) {
+func NewHandler(scope string, config *ScopeConfiguration, next http.Handler) (*Handler, error) {
 	h := Handler{
 		Next:   next,
 		Config: config,
@@ -27,7 +27,7 @@ func NewHandler(scope string, config *ScopeConfiguration, next http.Handler) (ht
 		h.Next = http.NotFoundHandler()
 	}
 
-	return h, nil
+	return &h, nil
 }
 
 // Handler implements http.Handler.
@@ -37,8 +37,7 @@ type Handler struct {
 	Scope  string // Basically this will be stripped from the full URL and the target path swapped in.
 }
 
-// ServeHTTP adapts the actual handler.
-// It picks a scope, trivially in this implementation because handlers have just one.
+// ServeHTTP handles any uploads, else defers the request to the next handler.
 func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var callNext bool
 

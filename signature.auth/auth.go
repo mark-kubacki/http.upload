@@ -50,7 +50,7 @@ func (m HmacSecrets) Insert(tuples []string) error {
 // Knowledge of a shared secret is expressed by providing its "signature".
 //
 // 'timestampRecv' is the Unix Timestamp at the time when the request has been received.
-func Authenticate(headers http.Header, secrets HmacSecrets, timestampRecv, timeTolerance uint64) AuthError {
+func Authenticate(headers http.Header, secrets HmacSecrets, timestampRecv, timeTolerance uint64) Failure {
 	if len(secrets) == 0 {
 		return errMethodUnauthorized
 	}

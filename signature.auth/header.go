@@ -36,12 +36,12 @@ type AuthorizationHeader struct {
 // Parse translates a string representation to this struct.
 //
 // Use this to deserialize the result of http.Header.Get(…).
-func (a *AuthorizationHeader) Parse(str string) (err AuthError) {
+func (a *AuthorizationHeader) Parse(str string) (err Failure) {
 	*a, err = parseAuthorizationHeader(str, *a)
 	return
 }
 
-func parseAuthorizationHeader(src string, a AuthorizationHeader) (AuthorizationHeader, AuthError) {
+func parseAuthorizationHeader(src string, a AuthorizationHeader) (AuthorizationHeader, Failure) {
 	var s scanner.Scanner
 
 	s.Init(strings.NewReader(src))
@@ -101,7 +101,7 @@ func parseAuthorizationHeader(src string, a AuthorizationHeader) (AuthorizationH
 
 // CheckFormal returns true if all listed headers are present
 // and timestamp(s) (if provided) are within a tolerance.
-func (a *AuthorizationHeader) CheckFormal(headers http.Header, timestampRecv, timeTolerance uint64) AuthError {
+func (a *AuthorizationHeader) CheckFormal(headers http.Header, timestampRecv, timeTolerance uint64) Failure {
 	for idx := range a.HeadersToSign {
 		k := a.HeadersToSign[idx]
 		v := headers.Get(k)
