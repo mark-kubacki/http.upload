@@ -4,8 +4,8 @@ tags: ['golang', 'caddy', 'plugin']
 substitutions:
   _PROJECT_ROOT: 'blitznote.com/src/http.upload'
 # Admittedly rather cumbersome, but I've a public fork of caddy of my own (also on Github).
-  _CADDY_ORIGIN: 'github.com/mholt/caddy'
-  _CADDY_FLAVOR: 'mholt/caddy'
+  _CADDY_ORIGIN: 'github.com/caddyserver/caddy'
+  _CADDY_FLAVOR: 'caddyserver/caddy'
 
 # Google's default image lacks some tools I frequently use.
 # Therefore steps don't start like this:
@@ -103,7 +103,7 @@ steps:
   - -c
   - |
     sed -i \
-      -e '/^require/a \\tgithub.com/mholt/caddy v1.0.0' \
+      -e '/^require/a \\t${_CADDY_ORIGIN} '$$(cat /var/go/theirs/src/${_CADDY_ORIGIN}/VERSION) \
       go.mod;
     sed -i \
       -e '/caddy v/s@v[^ ]*$$@'$$(cat /var/go/theirs/src/${_CADDY_ORIGIN}/VERSION)'@' \
