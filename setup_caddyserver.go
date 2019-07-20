@@ -210,6 +210,8 @@ func parseCaddyConfig(c *caddy.Controller) (*HandlerConfiguration, error) {
 					return siteConfig, c.Err(err.Error())
 				}
 				config.RandomizedSuffixLength = uint32(l)
+			default:
+				return siteConfig, c.ArgErr()
 			}
 		}
 
