@@ -194,7 +194,7 @@ steps:
   - -c
   - |
     cd "$(mktemp -d)";
-    printf 'localhost:8000\n\nupload /web/path {\n  to "/var/tmp"\n}\n' | tee Caddyfile;
+    printf 'localhost:8000\n\nupload /web/path {\n  to "/var/tmp"\n  enable_webdav\n}\n' | tee Caddyfile;
     set -eux;
     /workspace/caddy.upload~amd64_linux & sleep 0.2;
 

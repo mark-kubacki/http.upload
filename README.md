@@ -43,6 +43,7 @@ Let this be a legible shorthand for instances of `ScopeConfiguration`:
 upload <path> {
 	to                    "<directory>"
 
+	enable_webdav
 	filenames_form        <none|NFC|NFD>
 	filenames_in          <u0000-uff00> [<u0000-uff00>| …]
 	random_suffix_len     0..N
@@ -67,6 +68,9 @@ These settings are required:
 
 These are optional:
 
+ * **enable_webdav**: Enables other methods than POST and PUT,
+   especially MOVE and DELETE. Is a flag and has no parameters.  
+   (`disable_weddav` will no longer be recognized because it's the new default.)
  * **filenames_form**: if given, filenames and directories that are not 
    conforming to Unicode NFC or NFD will be rejected.  
    Set this to one of either values when you get errors indicating that your filesystem
@@ -122,6 +126,7 @@ Setup a minimal configuration like this:
 ```
 upload /web/path {
  	to "/var/tmp"
+ 	enable_webdav
 }
 ```
 
@@ -239,6 +244,7 @@ tls {
 ```
 upload /wp-uploads {
 	to "/var/www/senpai/wp-uploads"
+	enable_webdav
 	max_filesize 16777216
 	filenames_in u0000–u007F u0100–u017F u0391–u03C9 u2018–u203D u3000–u303f u3040–u309f u30a0–u30ff u4e00–9faf uff00–uffef
 

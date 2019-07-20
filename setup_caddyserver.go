@@ -172,8 +172,8 @@ func parseCaddyConfig(c *caddy.Controller) (*HandlerConfiguration, error) {
 			case "yes_without_tls":
 				// deprecated
 				// nop
-			case "disable_webdav":
-				config.DisableWebdav = true
+			case "enable_webdav":
+				config.EnableWebdav = true
 			case "filenames_form":
 				if !c.NextArg() {
 					return siteConfig, c.ArgErr()

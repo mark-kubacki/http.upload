@@ -24,6 +24,7 @@ func main() {
 	)
 
 	cfg := upload.NewDefaultConfiguration(directory)
+	cfg.EnableWebdav = true
 	uploadHandler, _ := upload.NewHandler(scope, cfg, next)
 
 	http.Handle(scope, uploadHandler)

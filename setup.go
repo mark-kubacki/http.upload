@@ -44,8 +44,8 @@ type ScopeConfiguration struct {
 	// which could respond with an Error of its own, poorly obscuring where this plugin is used.
 	SilenceAuthErrors bool
 
-	// This basically disables everything except POST and PUT.
-	DisableWebdav bool
+	// Enables MOVE, DELETE, and similar. Without this only POST and PUT will be recognized.
+	EnableWebdav bool
 
 	// Set this to reject any non-conforming filenames.
 	UnicodeForm *struct{ Use norm.Form }

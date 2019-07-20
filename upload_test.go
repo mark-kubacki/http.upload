@@ -35,9 +35,11 @@ func init() {
 	trivialConfig = `upload /subdir {
 		to "` + scratchDir + `"
 		promise_download_from /newdir
+		enable_webdav
 	}
 	upload / {
 		to "` + scratchDir + `"
+		enable_webdav
 	}`
 
 	sizeLimited = `upload /filesize {

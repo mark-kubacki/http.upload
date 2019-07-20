@@ -36,7 +36,7 @@ const (
 	errNoDestination           coreUploadError = "A destination is missing"
 	errUnknownEnvelopeFormat   coreUploadError = "Unknown envelope format"
 	errLengthInvalid           coreUploadError = "Field 'length' has been set, but is invalid"
-	errWebdavDisabled          coreUploadError = "WebDAV had been disabled"
+	errWebdavDisabled          coreUploadError = "WebDAV has been disabled"
 	errFileTooLarge            coreUploadError = "The uploaded file exceeds or would exceed max_filesize"
 	errTransactionTooLarge     coreUploadError = "Upload(s) do or will exceed max_transaction_size"
 )
@@ -64,14 +64,18 @@ func (h *Handler) serveHTTP(w http.ResponseWriter, r *http.Request,
 	nextFn func(http.ResponseWriter, *http.Request) (int, error),
 ) (int, error) {
 
-	if config.DisableWebdav {
-		switch r.Method {
-		case "COPY", "MOVE", "DELETE":
-			if config.SilenceAuthErrors {
-				return nextFn(w, r)
-			}
-			return http.StatusMethodNotAllowed, errWebdavDisabled
+	switch r.Method {
+	case http.MethodPost, http.MethodPut:
+		// nop; always permitted
+	default:
+		if config.EnableWebdav { // also allow any other methods
+			break
 		}
+
+		if config.SilenceAuthErrors {
+			return nextFn(w, r)
+		}
+		return http.StatusMethodNotAllowed, errWebdavDisabled
 	}
 
 	config.IncomingHmacSecretsLock.RLock()
