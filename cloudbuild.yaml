@@ -186,7 +186,7 @@ steps:
 #  env: ['GOPATH=/var/go/theirs:/go:/usr/share/gocode', 'GO111MODULE=on', 'GOARCH=amd64', 'GOOS=windows']
 
 # Now come integration tests.
-- name: 'docker.io/blitznote/debase:16.04'
+- name: 'gcr.io/cloud-builders/curl'
   waitFor: ['build linux amd64, Go current']
   id: 'integration test, example from doc'
   entrypoint: 'bash'
@@ -211,7 +211,7 @@ steps:
 
     kill %1
 
-- name: 'docker.io/blitznote/debase:16.04'
+- name: 'gcr.io/cloud-builders/curl'
   waitFor: ['build linux amd64, Go current']
   id: 'integration test, image upload'
   entrypoint: 'bash'
