@@ -70,7 +70,7 @@ These are optional:
 
  * **enable_webdav**: Enables other methods than POST and PUT,
    especially MOVE and DELETE. Is a flag and has no parameters.  
-   (`disable_weddav` will no longer be recognized because it's the new default.)
+   (`disable_webdav` will no longer be recognized because it's the new default.)
  * **filenames_form**: if given, filenames and directories that are not 
    conforming to Unicode NFC or NFD will be rejected.  
    Set this to one of either values when you get errors indicating that your filesystem
@@ -121,7 +121,8 @@ Optional, but required if you want to use the built-in authorization feature:
 Tutorial
 --------
 
-Setup a minimal configuration like this:
+Setup a minimal configuration like this, or `go run example.go &` after copying it into a separate
+directory and removing the line with `+build ignore` (mind the port number, which is `9000` there):
 
 ```
 upload /web/path {
