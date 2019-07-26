@@ -55,5 +55,7 @@ func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if httpCode >= 400 {
 		http.Error(w, err.Error(), httpCode)
+	} else {
+		w.WriteHeader(httpCode)
 	}
 }
