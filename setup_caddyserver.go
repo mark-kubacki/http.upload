@@ -69,17 +69,14 @@ type Handler struct {
 
 // ServeHTTP adapts the actual handler.
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error) {
-	switch r.Method {
-	case http.MethodPost, http.MethodPut, "COPY", "MOVE", "DELETE":
-		// iterate over the scopes in the order they have been defined
-		for _, scope := range h.Config.PathScopes {
-			if httpserver.Path(r.URL.Path).Matches(scope) {
-				config := h.Config.Scope[scope]
-				return h.serveHTTP(w, r,
-					scope, config,
-					h.Next.ServeHTTP,
-				)
-			}
+	// iterate over the scopes in the order they have been defined
+	for _, scope := range h.Config.PathScopes {
+		if httpserver.Path(r.URL.Path).Matches(scope) {
+			config := h.Config.Scope[scope]
+			return h.serveHTTP(w, r,
+				scope, config,
+				h.Next.ServeHTTP,
+			)
 		}
 	}
 	return h.Next.ServeHTTP(w, r)

@@ -67,15 +67,17 @@ func (h *Handler) serveHTTP(w http.ResponseWriter, r *http.Request,
 	switch r.Method {
 	case http.MethodPost, http.MethodPut:
 		// nop; always permitted
-	default:
+	case "COPY", "MOVE", "DELETE":
 		if config.EnableWebdav { // also allow any other methods
 			break
 		}
 
-		if config.SilenceAuthErrors {
-			return nextFn(w, r)
+		if !config.SilenceAuthErrors {
+			return http.StatusMethodNotAllowed, errWebdavDisabled
 		}
-		return http.StatusMethodNotAllowed, errWebdavDisabled
+		fallthrough
+	default:
+		return nextFn(w, r)
 	}
 
 	config.IncomingHmacSecretsLock.RLock()
