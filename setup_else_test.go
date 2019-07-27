@@ -7,8 +7,6 @@ package upload // import "blitznote.com/src/http.upload"
 
 import (
 	"net/http"
-
-	"blitznote.com/src/http.upload"
 )
 
 func Example() {
@@ -18,8 +16,8 @@ func Example() {
 		next      = http.FileServer(http.Dir(directory))
 	)
 
-	cfg := upload.NewDefaultConfiguration(directory)
-	uploadHandler, _ := upload.NewHandler(scope, cfg, next)
+	cfg := NewDefaultConfiguration(directory)
+	uploadHandler, _ := NewHandler(scope, cfg, next)
 
 	http.Handle(scope, uploadHandler)
 	// http.ListenAndServe(":9000", nil)

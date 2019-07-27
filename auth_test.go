@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -20,20 +21,6 @@ import (
 	. "github.com/smartystreets/goconvey/convey"
 )
 
-var (
-	trivialConfigWithAuth string
-)
-
-func init() {
-	scratchDir = os.TempDir()
-
-	// don't pull in package 'fmt' for this
-	trivialConfigWithAuth = `upload / {
-		to "` + scratchDir + `"
-		hmac_keys_in hmac-key-1=TWFyaw== zween=dXBsb2Fk
-	}`
-}
-
 func computeSignature(secret []byte, headerContents []string) string {
 	mac := hmac.New(sha256.New, secret)
 	for _, v := range headerContents {
@@ -44,7 +31,10 @@ func computeSignature(secret []byte, headerContents []string) string {
 
 func TestUploadAuthentication(t *testing.T) {
 	Convey("Given authentication", t, func() {
-		h := newTestUploadHander(t, trivialConfigWithAuth)
+		scratchDir := os.TempDir()
+		cfg := NewDefaultConfiguration(scratchDir)
+		cfg.IncomingHmacSecrets.Insert([]string{"hmac-key-1=TWFyaw==", "zween=dXBsb2Fk"})
+		h, _ := NewHandler("/", cfg, next)
 		w := httptest.NewRecorder()
 
 		Convey("deny uploads lacking the expected header", func() {
@@ -55,10 +45,12 @@ func TestUploadAuthentication(t *testing.T) {
 			}
 			req.Header.Set("Content-Length", "5")
 
-			code, err := h.ServeHTTP(w, req)
-			So(err, ShouldNotBeNil)
-			So(code, ShouldEqual, 401)
-			So(w.Header().Get("WWW-Authenticate"), ShouldEqual, "Signature")
+			h.ServeHTTP(w, req)
+			resp := w.Result()
+			ioutil.ReadAll(resp.Body)
+
+			So(resp.StatusCode, ShouldEqual, 401)
+			So(resp.Header.Get("WWW-Authenticate"), ShouldEqual, "Signature")
 		})
 
 		Convey("pass the upload operation on valid input", func() {
@@ -77,9 +69,11 @@ func TestUploadAuthentication(t *testing.T) {
 			req.Header.Set("Authorization", fmt.Sprintf(`Signature keyId="%s",signature="%s"`,
 				"zween", computeSignature([]byte("upload"), []string{ts, "ABC"})))
 
-			code, err := h.ServeHTTP(w, req)
-			So(code, ShouldEqual, 201)
-			So(err, ShouldBeNil)
+			h.ServeHTTP(w, req)
+			resp := w.Result()
+			ioutil.ReadAll(resp.Body)
+
+			So(resp.StatusCode, ShouldEqual, 201)
 
 			compareContents(filepath.Join(scratchDir, tempFName), []byte("DELME"))
 		})

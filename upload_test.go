@@ -16,64 +16,70 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/caddyserver/caddy"
-	"github.com/caddyserver/caddy/caddyhttp/httpserver"
-
 	. "github.com/smartystreets/goconvey/convey"
 )
 
 var (
-	scratchDir    string // tests will create files and directories here
-	trivialConfig string
-	sizeLimited   string
+	scratchDir string // tests will create files and directories here
+
+	trivialConfig http.Handler
+	sizeLimited   http.Handler
+
+	next = new(teapotHandler)
 )
+
+// A dummy with a pre-defined return value not found in production,
+// used in place of any actual chained handler.
+// Enables us to see whether a request has been passed through.
+type teapotHandler struct {
+	http.Handler
+}
+
+// ServeHTTP implements the http.Handler interface.
+func (n teapotHandler) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
+	code := http.StatusTeapot
+	http.Error(w, http.StatusText(code), code)
+}
 
 func init() {
 	scratchDir = os.TempDir()
 
-	// don't pull in package 'fmt' for this
-	trivialConfig = `upload /subdir {
-		to "` + scratchDir + `"
-		promise_download_from /newdir
-		enable_webdav
-	}
-	upload / {
-		to "` + scratchDir + `"
-		enable_webdav
-	}`
+	t := http.NewServeMux()
+	{
+		c1 := NewDefaultConfiguration(scratchDir)
+		c1.EnableWebdav = true
+		c1.ApparentLocation = "/newdir"
+		h1, _ := NewHandler("/subdir", c1, next)
+		t.Handle("/subdir/", h1)
 
-	sizeLimited = `upload /filesize {
-		to "` + scratchDir + `"
-		max_filesize 64000
-		max_transaction_size 0
+		c2 := NewDefaultConfiguration(scratchDir)
+		c2.EnableWebdav = true
+		h2, _ := NewHandler("/", c2, next)
+		t.Handle("/", h2)
 	}
-	upload /transaction {
-		to "` + scratchDir + `"
-		max_filesize 0
-		max_transaction_size 64000
+	trivialConfig = t
+
+	u := http.NewServeMux()
+	{
+		c1 := NewDefaultConfiguration(scratchDir)
+		c1.MaxFilesize = 64000
+		c1.MaxTransactionSize = 0
+		h1, _ := NewHandler("/filesize", c1, next)
+		u.Handle("/filesize/", h1)
+
+		c2 := NewDefaultConfiguration(scratchDir)
+		c2.MaxFilesize = 0
+		c2.MaxTransactionSize = 64000
+		h2, _ := NewHandler("/transaction", c2, next)
+		u.Handle("/transaction/", h2)
+
+		c3 := NewDefaultConfiguration(scratchDir)
+		c3.MaxFilesize = 64000
+		c3.MaxTransactionSize = 128000
+		h3, _ := NewHandler("/both/", c3, next)
+		u.Handle("/both/", h3)
 	}
-	upload /both {
-		to "` + scratchDir + `"
-		max_filesize 64000
-		max_transaction_size 128000
-	}`
-}
-
-func newTestUploadHander(t *testing.T, configExcerpt string) httpserver.Handler {
-	c := caddy.NewTestController("http", configExcerpt)
-	err := Setup(c)
-	if err != nil {
-		t.Fatal(err)
-	}
-	upstream := httpserver.GetConfig(c)
-	mids := upstream.Middleware()
-	m := mids[0]
-
-	next := httpserver.HandlerFunc(func(w http.ResponseWriter, r *http.Request) (int, error) {
-		return http.StatusTeapot, nil
-	})
-
-	return m(next)
+	sizeLimited = u
 }
 
 // Generates a new temporary file name without a path.
@@ -108,7 +114,7 @@ func compareContents(filename string, contents []byte) {
 
 func TestUpload_ServeHTTP(t *testing.T) {
 	Convey("GET is a no-op", t, func() {
-		h := newTestUploadHander(t, trivialConfig)
+		h := trivialConfig
 		w := httptest.NewRecorder()
 		req, err := http.NewRequest("GET", "/stuff", nil)
 		if err != nil {
@@ -116,14 +122,15 @@ func TestUpload_ServeHTTP(t *testing.T) {
 		}
 		req.Header.Set("Accept", "text/*")
 
-		code, err := h.ServeHTTP(w, req)
-		So(code, ShouldEqual, http.StatusTeapot)
-		So(err, ShouldBeNil)
+		h.ServeHTTP(w, req)
+		resp := w.Result()
+		ioutil.ReadAll(resp.Body)
+
+		So(resp.StatusCode, ShouldEqual, http.StatusTeapot)
 	})
 
 	Convey("Uploading files using PUT", t, func() {
-		h := newTestUploadHander(t, trivialConfig)
-		w := httptest.NewRecorder()
+		h := trivialConfig
 
 		Convey("succeeds with one trivially small file", func() {
 			tempFName := tempFileName()
@@ -136,11 +143,12 @@ func TestUpload_ServeHTTP(t *testing.T) {
 				os.Remove(filepath.Join(scratchDir, tempFName))
 			}()
 
-			code, err := h.ServeHTTP(w, req)
-			if err != nil {
-				t.Fatal(err)
-			}
-			So(code, ShouldEqual, 201)
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, req)
+			resp := w.Result()
+			ioutil.ReadAll(resp.Body)
+
+			So(resp.StatusCode, ShouldEqual, 201)
 
 			compareContents(filepath.Join(scratchDir, tempFName), []byte("DELME"))
 		})
@@ -156,11 +164,12 @@ func TestUpload_ServeHTTP(t *testing.T) {
 				os.Remove(filepath.Join(scratchDir, tempFName))
 			}()
 
-			code, err := h.ServeHTTP(w, req)
-			if err != nil {
-				t.Fatal(err)
-			}
-			So(code, ShouldEqual, 201)
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, req)
+			resp := w.Result()
+			ioutil.ReadAll(resp.Body)
+
+			So(resp.StatusCode, ShouldEqual, 201)
 
 			fileStat, err := os.Stat(filepath.Join(scratchDir, tempFName))
 			if err != nil {
@@ -180,18 +189,21 @@ func TestUpload_ServeHTTP(t *testing.T) {
 				os.Remove(filepath.Join(scratchDir, tempFName))
 			}()
 
-			_, err = h.ServeHTTP(w, req)
-			if err != nil {
-				t.Fatal(err)
-			}
-			So(w.Header().Get("Location"), ShouldEqual, "/newdir/"+tempFName)
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, req)
+			resp := w.Result()
+			ioutil.ReadAll(resp.Body)
+
+			So(resp.Header.Get("Location"), ShouldEqual, "/newdir/"+tempFName)
 		})
 
 		Convey("strips the prefix correctly", func() {
 			scopeName := tempFileName()
 			pathName, fileName := tempFileName(), tempFileName()
 
-			h := newTestUploadHander(t, `upload /`+scopeName+` { to "`+scratchDir+`" }`)
+			cfg := NewDefaultConfiguration(scratchDir)
+			h, _ := NewHandler("/"+scopeName+"/", cfg, next)
+
 			req, err := http.NewRequest("PUT", "/"+scopeName+"/"+pathName+"/"+fileName, strings.NewReader("DELME"))
 			if err != nil {
 				t.Fatal(err)
@@ -204,9 +216,12 @@ func TestUpload_ServeHTTP(t *testing.T) {
 				os.RemoveAll(filepath.Join(scratchDir, pathName))
 			}()
 
-			code, _ := h.ServeHTTP(w, req)
-			So(code, ShouldEqual, 201)
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, req)
+			resp := w.Result()
+			ioutil.ReadAll(resp.Body)
 
+			So(resp.StatusCode, ShouldEqual, 201)
 			_, err = os.Stat(filepath.Join(scratchDir, scopeName))
 			So(os.IsNotExist(err), ShouldBeTrue)
 		})
@@ -222,16 +237,20 @@ func TestUpload_ServeHTTP(t *testing.T) {
 				os.Remove(filepath.Join(scratchDir, tempFName))
 			}()
 
-			code, err := h.ServeHTTP(w, req)
-			if err != nil {
-				t.Fatal(err)
-			}
-			So(code, ShouldEqual, 202)
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, req)
+			resp := w.Result()
+			ioutil.ReadAll(resp.Body)
+
+			So(resp.StatusCode, ShouldEqual, 202)
 
 			compareContents(filepath.Join(scratchDir, tempFName), []byte("DELME"))
 		})
 
 		Convey("gets aborted for files below the writable path", func() {
+			// Bypass http.ServeMux becuase it interferes with path parsing.
+			h, _ := NewHandler("/", NewDefaultConfiguration(scratchDir), next)
+
 			tempFName := tempFileName()
 			req, err := http.NewRequest("PUT", "/nop/../../../tmp/../"+tempFName, strings.NewReader("DELME"))
 			if err != nil {
@@ -239,18 +258,16 @@ func TestUpload_ServeHTTP(t *testing.T) {
 			}
 			req.Header.Set("Content-Length", "5")
 
-			code, err := h.ServeHTTP(w, req)
-			So(err, ShouldNotBeNil)
-			if err != nil {
-				So(err.Error(), ShouldEqual, "permission denied")
-			}
-			So(code, ShouldEqual, 422)
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, req)
+			resp := w.Result()
+			ioutil.ReadAll(resp.Body)
+			So(resp.StatusCode, ShouldEqual, 422)
 		})
 	})
 
 	Convey("Uploading files using POST", t, func() {
-		h := newTestUploadHander(t, trivialConfig)
-		w := httptest.NewRecorder()
+		h := trivialConfig
 
 		Convey("works with one file which is not in an envelope", func() {
 			tempFName := tempFileName()
@@ -263,11 +280,12 @@ func TestUpload_ServeHTTP(t *testing.T) {
 				os.Remove(filepath.Join(scratchDir, tempFName))
 			}()
 
-			code, err := h.ServeHTTP(w, req)
-			if err != nil {
-				t.Fatal(err)
-			}
-			So(code, ShouldEqual, 201)
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, req)
+			resp := w.Result()
+			ioutil.ReadAll(resp.Body)
+
+			So(resp.StatusCode, ShouldEqual, 201)
 
 			compareContents(filepath.Join(scratchDir, tempFName), []byte("DELME"))
 		})
@@ -297,11 +315,12 @@ func TestUpload_ServeHTTP(t *testing.T) {
 				os.Remove(filepath.Join(scratchDir, tempFName2))
 			}()
 
-			code, err := h.ServeHTTP(w, req)
-			if err != nil {
-				t.Fatal(err)
-			}
-			So(code, ShouldEqual, 201)
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, req)
+			resp := w.Result()
+			ioutil.ReadAll(resp.Body)
+
+			So(resp.StatusCode, ShouldEqual, 201)
 
 			compareContents(filepath.Join(scratchDir, tempFName), []byte("DELME"))
 			compareContents(filepath.Join(scratchDir, tempFName2), []byte("REMOVEME"))
@@ -329,11 +348,12 @@ func TestUpload_ServeHTTP(t *testing.T) {
 				os.Remove(filepath.Join(scratchDir, tempFName))
 			}()
 
-			code, err := h.ServeHTTP(w, req)
-			if err != nil {
-				t.Fatal(err)
-			}
-			So(code, ShouldEqual, 201)
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, req)
+			resp := w.Result()
+			ioutil.ReadAll(resp.Body)
+
+			So(resp.StatusCode, ShouldEqual, 201)
 
 			compareContents(filepath.Join(scratchDir, tempFName), []byte("DELME"))
 		})
@@ -350,20 +370,20 @@ func TestUpload_ServeHTTP(t *testing.T) {
 				os.Remove(filepath.Join(scratchDir, tempFName))
 			}()
 
-			code, _ := h.ServeHTTP(w, req)
-			So(code, ShouldEqual, 415)
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, req)
+			resp := w.Result()
+			ioutil.ReadAll(resp.Body)
+
+			So(resp.StatusCode, ShouldEqual, 415)
 		})
 	})
 
 	Convey("A random suffix", t, func() {
-		configWithSuffix := `upload / {
-			to                    "` + scratchDir + `"
-			promise_download_from /
-			random_suffix_len     3
-		}`
-
-		h := newTestUploadHander(t, configWithSuffix)
-		w := httptest.NewRecorder()
+		cfg := NewDefaultConfiguration(scratchDir)
+		cfg.ApparentLocation = "/"
+		cfg.RandomizedSuffixLength = 3
+		h, _ := NewHandler("/", cfg, next)
 
 		Convey("can be used in a full filename as in NAME_XXX.EXT", func() {
 			tempFName := tempFileName()
@@ -385,13 +405,14 @@ func TestUpload_ServeHTTP(t *testing.T) {
 				os.Remove(filepath.Join(scratchDir, tempFName))
 			}()
 
-			code, err := h.ServeHTTP(w, req)
-			if err != nil {
-				t.Fatal(err)
-			}
-			So(code, ShouldEqual, 201)
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, req)
+			resp := w.Result()
+			ioutil.ReadAll(resp.Body)
 
-			uploadedAs := w.Header().Get("Location")
+			So(resp.StatusCode, ShouldEqual, 201)
+
+			uploadedAs := resp.Header.Get("Location")
 			So(uploadedAs, ShouldNotBeBlank)
 			So(uploadedAs, ShouldStartWith, "/name_")
 			So(uploadedAs, ShouldEndWith, ".ext")
@@ -418,13 +439,14 @@ func TestUpload_ServeHTTP(t *testing.T) {
 				os.Remove(filepath.Join(scratchDir, tempFName))
 			}()
 
-			code, err := h.ServeHTTP(w, req)
-			if err != nil {
-				t.Fatal(err)
-			}
-			So(code, ShouldEqual, 201)
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, req)
+			resp := w.Result()
+			ioutil.ReadAll(resp.Body)
 
-			uploadedAs := w.Header().Get("Location")
+			So(resp.StatusCode, ShouldEqual, 201)
+
+			uploadedAs := resp.Header.Get("Location")
 			So(uploadedAs, ShouldNotBeBlank)
 			So(uploadedAs, ShouldStartWith, "/")
 			So(uploadedAs, ShouldEndWith, ".ext")
@@ -433,8 +455,7 @@ func TestUpload_ServeHTTP(t *testing.T) {
 	})
 
 	Convey("Handling of conflicts includes", t, func() {
-		h := newTestUploadHander(t, trivialConfig)
-		w := httptest.NewRecorder()
+		h, _ := NewHandler("/", NewDefaultConfiguration(scratchDir), next)
 
 		Convey("name clashes between directories and new filename", func() {
 			tempFName := tempFileName()
@@ -447,8 +468,11 @@ func TestUpload_ServeHTTP(t *testing.T) {
 				os.Remove(filepath.Join(scratchDir, tempFName, tempFName))
 			}()
 
-			code, _ := h.ServeHTTP(w, req)
-			So(code, ShouldEqual, 201)
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, req)
+			resp := w.Result()
+			ioutil.ReadAll(resp.Body)
+			So(resp.StatusCode, ShouldEqual, 201)
 
 			// write to directory /var/tmp/${tempFName}
 			req, err = http.NewRequest("PUT", "/"+tempFName, strings.NewReader("DELME"))
@@ -460,8 +484,11 @@ func TestUpload_ServeHTTP(t *testing.T) {
 				os.RemoveAll(filepath.Join(scratchDir, tempFName))
 			}()
 
-			code, _ = h.ServeHTTP(w, req)
-			So(code, ShouldBeIn, 409, 500)
+			w = httptest.NewRecorder()
+			h.ServeHTTP(w, req)
+			resp = w.Result()
+			ioutil.ReadAll(resp.Body)
+			So(resp.StatusCode, ShouldBeIn, 409, 500)
 		})
 
 		Convey("name clashes between filename and new directory", func() {
@@ -475,8 +502,11 @@ func TestUpload_ServeHTTP(t *testing.T) {
 				os.Remove(filepath.Join(scratchDir, tempFName))
 			}()
 
-			code, _ := h.ServeHTTP(w, req)
-			So(code, ShouldEqual, 201)
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, req)
+			resp := w.Result()
+			ioutil.ReadAll(resp.Body)
+			So(resp.StatusCode, ShouldEqual, 201)
 
 			// write to directory /var/tmp/${tempFName}
 			req, err = http.NewRequest("PUT", "/"+tempFName+"/"+tempFName, strings.NewReader("DELME"))
@@ -488,18 +518,21 @@ func TestUpload_ServeHTTP(t *testing.T) {
 				os.RemoveAll(filepath.Join(scratchDir, tempFName, tempFName))
 			}()
 
-			code, _ = h.ServeHTTP(w, req)
+			w = httptest.NewRecorder()
+			h.ServeHTTP(w, req)
+			resp = w.Result()
+			ioutil.ReadAll(resp.Body)
+
 			if runtime.GOOS == "windows" {
-				So(code, ShouldBeIn, 409, 500)
+				So(resp.StatusCode, ShouldBeIn, 409, 500)
 			} else {
-				So(code, ShouldEqual, 409) // 409: conflict
+				So(resp.StatusCode, ShouldEqual, 409) // 409: conflict
 			}
 		})
 	})
 
 	Convey("COPY, MOVE, and DELETE are supported", t, func() {
-		h := newTestUploadHander(t, trivialConfig)
-		w := httptest.NewRecorder()
+		h := trivialConfig
 
 		SkipConvey("COPY duplicates a file", func() {
 			tempFName, copyFName := tempFileName(), tempFileName()
@@ -509,9 +542,12 @@ func TestUpload_ServeHTTP(t *testing.T) {
 			}()
 			req.Header.Set("Content-Length", "5")
 
-			code, _ := h.ServeHTTP(w, req)
-			if code != 200 {
-				So(code, ShouldEqual, 200)
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, req)
+			resp := w.Result()
+			ioutil.ReadAll(resp.Body)
+			if resp.StatusCode != 200 {
+				So(resp.StatusCode, ShouldEqual, 200)
 				return
 			}
 
@@ -522,8 +558,12 @@ func TestUpload_ServeHTTP(t *testing.T) {
 				os.Remove(filepath.Join(scratchDir, copyFName))
 			}()
 
-			code, _ = h.ServeHTTP(w, req)
-			So(code, ShouldEqual, 201)
+			w = httptest.NewRecorder()
+			h.ServeHTTP(w, req)
+			resp = w.Result()
+			ioutil.ReadAll(resp.Body)
+
+			So(resp.StatusCode, ShouldEqual, 201)
 
 			_, err := os.Stat(filepath.Join(scratchDir, copyFName))
 			So(os.IsNotExist(err), ShouldBeFalse)
@@ -537,11 +577,11 @@ func TestUpload_ServeHTTP(t *testing.T) {
 			}()
 			req.Header.Set("Content-Length", "5")
 
-			code, _ := h.ServeHTTP(w, req)
-			if !(code == 200 || code == 201 || code == 204) {
-				So(code, ShouldEqual, 201)
-				return
-			}
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, req)
+			resp := w.Result()
+			ioutil.ReadAll(resp.Body)
+			So(resp.StatusCode, ShouldEqual, 201)
 
 			// MOVE
 			req, _ = http.NewRequest("MOVE", "/"+tempFName, nil)
@@ -550,8 +590,12 @@ func TestUpload_ServeHTTP(t *testing.T) {
 				os.Remove(filepath.Join(scratchDir, copyFName))
 			}()
 
-			code, _ = h.ServeHTTP(w, req)
-			So(code, ShouldEqual, 201)
+			w = httptest.NewRecorder()
+			h.ServeHTTP(w, req)
+			resp = w.Result()
+			ioutil.ReadAll(resp.Body)
+
+			So(resp.StatusCode, ShouldEqual, 201)
 
 			_, err := os.Stat(filepath.Join(scratchDir, tempFName))
 			So(os.IsNotExist(err), ShouldBeTrue)
@@ -567,27 +611,37 @@ func TestUpload_ServeHTTP(t *testing.T) {
 			}()
 			req.Header.Set("Content-Length", "5")
 
-			code, _ := h.ServeHTTP(w, req)
-			if !(code == 200 || code == 201 || code == 204) {
-				So(code, ShouldEqual, 201)
-				return
-			}
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, req)
+			resp := w.Result()
+			ioutil.ReadAll(resp.Body)
+			So(resp.StatusCode, ShouldEqual, 201)
 
 			// DELETE
 			req, _ = http.NewRequest("DELETE", "/"+tempFName, nil)
 
-			code, _ = h.ServeHTTP(w, req)
-			So(code, ShouldEqual, 204)
+			w = httptest.NewRecorder()
+			h.ServeHTTP(w, req)
+			resp = w.Result()
+			ioutil.ReadAll(resp.Body)
+
+			So(resp.StatusCode, ShouldEqual, 204)
 
 			_, err := os.Stat(filepath.Join(scratchDir, tempFName))
 			So(os.IsNotExist(err), ShouldBeTrue)
 		})
 
 		Convey("DELETE will not remove the target directory", func() {
+			cfg := NewDefaultConfiguration(scratchDir)
+			cfg.EnableWebdav = true
+			h, _ := NewHandler("/subdir", cfg, next)
 			req, _ := http.NewRequest("DELETE", "/subdir", nil)
 
-			code, _ := h.ServeHTTP(w, req)
-			So(code, ShouldEqual, 403)
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, req)
+			resp := w.Result()
+			ioutil.ReadAll(resp.Body)
+			So(resp.StatusCode, ShouldEqual, 403)
 
 			_, err := os.Stat(scratchDir)
 			So(os.IsNotExist(err), ShouldBeFalse)
@@ -595,8 +649,7 @@ func TestUpload_ServeHTTP(t *testing.T) {
 	})
 
 	Convey("Cap", t, func() {
-		w := httptest.NewRecorder()
-		h := newTestUploadHander(t, sizeLimited)
+		h := sizeLimited
 
 		Convey("maximum filesize for single-file uploads", func() {
 			for _, limitedBy := range [...]string{"filesize", "transaction", "both"} {
@@ -612,22 +665,34 @@ func TestUpload_ServeHTTP(t *testing.T) {
 
 					// test header processing
 					req.Header.Set("Content-Length", "64001")
-					code, _ := h.ServeHTTP(w, req)
-					So(code, ShouldEqual, 413) // too large, as indicated by the header
+					w := httptest.NewRecorder()
+					h.ServeHTTP(w, req)
+					resp := w.Result()
+					ioutil.ReadAll(resp.Body)
+					So(resp.StatusCode, ShouldEqual, 413) // too large, as indicated by the header
 
 					req.Header.Set("Content-Length", "64000")
-					code, _ = h.ServeHTTP(w, req)
-					So(code, ShouldBeIn, 201, 202) // at the limit
+					w = httptest.NewRecorder()
+					h.ServeHTTP(w, req)
+					resp = w.Result()
+					ioutil.ReadAll(resp.Body)
+					So(resp.StatusCode, ShouldBeIn, 201, 202) // at the limit
 
 					// now change the actual file contents
 					req.Body = ioutil.NopCloser(strings.NewReader(strings.Repeat("\xcc", 64000)))
-					code, _ = h.ServeHTTP(w, req)
-					So(code, ShouldBeIn, 201, 202)
+					w = httptest.NewRecorder()
+					h.ServeHTTP(w, req)
+					resp = w.Result()
+					ioutil.ReadAll(resp.Body)
+					So(resp.StatusCode, ShouldBeIn, 201, 202)
 
 					req.Header.Del("Content-Length")
 					req.Body = ioutil.NopCloser(strings.NewReader(strings.Repeat("\x33", 64001)))
-					code, _ = h.ServeHTTP(w, req)
-					So(code, ShouldEqual, 413)
+					w = httptest.NewRecorder()
+					h.ServeHTTP(w, req)
+					resp = w.Result()
+					ioutil.ReadAll(resp.Body)
+					So(resp.StatusCode, ShouldEqual, 413)
 				})
 			}
 		})
@@ -649,7 +714,7 @@ Winter is coming.
 
 `
 
-					req, err := http.NewRequest("POST", "/"+limitedBy, strings.NewReader(headerOnlyBody))
+					req, err := http.NewRequest("POST", "/"+limitedBy+"/", strings.NewReader(headerOnlyBody))
 					req.Header.Set("Content-Type", ctype)
 					if err != nil {
 						t.Fatal(err)
@@ -658,64 +723,76 @@ Winter is coming.
 						os.Remove(filepath.Join(scratchDir, tempFName))
 					}()
 
-					code, err := h.ServeHTTP(w, req)
-					So(code, ShouldBeIn, 201, 202)
-					So(err, ShouldBeNil)
+					w := httptest.NewRecorder()
+					h.ServeHTTP(w, req)
+					resp := w.Result()
+					ioutil.ReadAll(resp.Body)
+					So(resp.StatusCode, ShouldBeIn, 201, 202)
 
 					headerOnlyBody = strings.Replace(headerOnlyBody, "1234", "64001", 1)
-					req, err = http.NewRequest("POST", "/"+limitedBy, strings.NewReader(headerOnlyBody))
+					req, _ = http.NewRequest("POST", "/"+limitedBy+"/", strings.NewReader(headerOnlyBody))
 					req.Header.Set("Content-Type", ctype)
-					code, err = h.ServeHTTP(w, req)
-					So(err, ShouldNotBeNil)
-					So(code, ShouldBeIn, 413, 422)
+					w = httptest.NewRecorder()
+					h.ServeHTTP(w, req)
+					resp = w.Result()
+					ioutil.ReadAll(resp.Body)
+					So(resp.StatusCode, ShouldBeIn, 413, 422)
 
 					// As multipart.NewWriter does not set the Content-Length header this is about content only.
 					body, ctype := payloadWithAttachments(tempFName, 64001)
-					req, err = http.NewRequest("POST", "/"+limitedBy+"/"+tempFName, body)
+					req, _ = http.NewRequest("POST", "/"+limitedBy+"/"+tempFName, body)
 					req.Header.Set("Content-Type", ctype)
-					code, err = h.ServeHTTP(w, req)
-					So(err, ShouldNotBeNil)
-					So(code, ShouldBeIn, 413, 422)
+					w = httptest.NewRecorder()
+					h.ServeHTTP(w, req)
+					resp = w.Result()
+					ioutil.ReadAll(resp.Body)
+					So(resp.StatusCode, ShouldBeIn, 413, 422)
 
 					body, ctype = payloadWithAttachments(tempFName, 64000)
-					req, err = http.NewRequest("POST", "/"+limitedBy+"/"+tempFName, body)
+					req, _ = http.NewRequest("POST", "/"+limitedBy+"/"+tempFName, body)
 					req.Header.Set("Content-Type", ctype)
-					code, err = h.ServeHTTP(w, req)
-					So(code, ShouldBeIn, 201, 202)
-					So(err, ShouldBeNil)
+					w = httptest.NewRecorder()
+					h.ServeHTTP(w, req)
+					resp = w.Result()
+					ioutil.ReadAll(resp.Body)
+					So(resp.StatusCode, ShouldBeIn, 201, 202)
 
 					body, ctype = payloadWithAttachments(tempFName, 64000, 64000)
-					req, err = http.NewRequest("POST", "/"+limitedBy+"/"+tempFName, body)
+					req, _ = http.NewRequest("POST", "/"+limitedBy+"/"+tempFName, body)
 					req.Header.Set("Content-Type", ctype)
-					code, err = h.ServeHTTP(w, req)
+					w = httptest.NewRecorder()
+					h.ServeHTTP(w, req)
+					resp = w.Result()
+					ioutil.ReadAll(resp.Body)
 					switch limitedBy {
 					case "transaction":
-						So(err, ShouldNotBeNil)
-						So(code, ShouldBeIn, 413, 422)
+						So(resp.StatusCode, ShouldBeIn, 413, 422)
 					default:
-						So(code, ShouldBeIn, 201, 202)
-						So(err, ShouldBeNil)
+						So(resp.StatusCode, ShouldBeIn, 201, 202)
 					}
 
 					body, ctype = payloadWithAttachments(tempFName, 64000, 64000, 1)
-					req, err = http.NewRequest("POST", "/"+limitedBy+"/"+tempFName, body)
+					req, _ = http.NewRequest("POST", "/"+limitedBy+"/"+tempFName, body)
 					req.Header.Set("Content-Type", ctype)
-					code, err = h.ServeHTTP(w, req)
+					w = httptest.NewRecorder()
+					h.ServeHTTP(w, req)
+					resp = w.Result()
+					ioutil.ReadAll(resp.Body)
 					switch limitedBy {
 					case "transaction", "both":
-						So(err, ShouldNotBeNil)
-						So(code, ShouldBeIn, 413, 422)
+						So(resp.StatusCode, ShouldBeIn, 413, 422)
 					default:
-						So(code, ShouldBeIn, 201, 202)
-						So(err, ShouldBeNil)
+						So(resp.StatusCode, ShouldBeIn, 201, 202)
 					}
 
 					body, ctype = payloadWithAttachments(tempFName, 64000, 64000, 64001)
-					req, err = http.NewRequest("POST", "/"+limitedBy+"/"+tempFName, body)
+					req, _ = http.NewRequest("POST", "/"+limitedBy+"/"+tempFName, body)
 					req.Header.Set("Content-Type", ctype)
-					code, err = h.ServeHTTP(w, req)
-					So(err, ShouldNotBeNil)
-					So(code, ShouldBeIn, 413, 422)
+					w = httptest.NewRecorder()
+					h.ServeHTTP(w, req)
+					resp = w.Result()
+					ioutil.ReadAll(resp.Body)
+					So(resp.StatusCode, ShouldBeIn, 413, 422)
 				})
 			}
 		})

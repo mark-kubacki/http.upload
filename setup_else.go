@@ -53,7 +53,7 @@ func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.Next.ServeHTTP(w, r)
 		return
 	}
-	if httpCode >= 400 {
+	if httpCode >= 400 && err != nil {
 		http.Error(w, err.Error(), httpCode)
 	} else {
 		w.WriteHeader(httpCode)
