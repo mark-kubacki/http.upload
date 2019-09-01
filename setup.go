@@ -1,13 +1,13 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package upload // import "blitznote.com/src/http.upload"
+package upload
 
 import (
 	"sync"
 	"unicode"
 
-	"blitznote.com/src/http.upload/signature.auth"
+	"blitznote.com/src/http.upload/v3/signature.auth"
 	"golang.org/x/text/unicode/norm"
 )
 

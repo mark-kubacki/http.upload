@@ -3,7 +3,7 @@
 
 // +build caddyserver0.9 caddyserver1.0
 
-package upload // import "blitznote.com/src/http.upload"
+package upload
 
 import (
 	"errors"
