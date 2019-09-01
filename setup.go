@@ -28,11 +28,6 @@ type ScopeConfiguration struct {
 	// If ≠ "" this will trigger sending headers such as "Location".
 	ApparentLocation string
 
-	// UploadProgressCallback is called every so often
-	// to report the total bytes written to a single file and the current error,
-	// including 'io.EOF'.
-	UploadProgressCallback func(uint64, error)
-
 	// Maps KeyIDs to shared secrets.
 	// Here the latter are already decoded from base64 to binary.
 	// Request verification is disabled if this is empty.
@@ -60,16 +55,10 @@ type ScopeConfiguration struct {
 // NewDefaultConfiguration creates a new default configuration.
 func NewDefaultConfiguration(targetDirectory string) *ScopeConfiguration {
 	cfg := ScopeConfiguration{
-		TimestampTolerance:     1 << 2,
-		WriteToPath:            targetDirectory,
-		UploadProgressCallback: noopUploadProgressCallback,
-		IncomingHmacSecrets:    make(auth.HmacSecrets),
+		TimestampTolerance:  1 << 2,
+		WriteToPath:         targetDirectory,
+		IncomingHmacSecrets: make(auth.HmacSecrets),
 	}
 
 	return &cfg
-}
-
-// noopUploadProgressCallback NOP-functor, set as default.
-func noopUploadProgressCallback(bytesWritten uint64, err error) {
-	// I want to become a closure that updates a data structure.
 }

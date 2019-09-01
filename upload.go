@@ -19,15 +19,6 @@ import (
 	"golang.org/x/text/unicode/norm"
 )
 
-const (
-	// Every so many bytes the |uploadProgressCallback| is called,
-	// and checked if a file receives more bytes than any quota permits.
-	// For one, this is cheaper than doing it for every byte,
-	// and second, future versions will switch to blockwise writing, which is
-	// more efficient and necessary for some high-speed NICs (think: 10GbE+).
-	reportProgressEveryBytes = 1 << 15
-)
-
 // Errors used in functions that resemble the core logic of this plugin.
 const (
 	errCannotReadMIMEMultipart coreUploadError = "Error reading MIME multipart payload"
@@ -344,11 +335,7 @@ func (h *Handler) writeOneHTTPBlob(scope string, config *ScopeConfiguration, fil
 		}
 	}
 
-	callback := config.UploadProgressCallback
-	if callback == nil {
-		callback = noopUploadProgressCallback
-	}
-	bytesWritten, err := writeFileFromReader(path, fname, r, expectBytes, writeQuota, callback)
+	bytesWritten, err := writeFileFromReader(path, fname, r, expectBytes, writeQuota)
 	locationOnDisk := filepath.Join(path, fname)
 	if err != nil && err != io.EOF {
 		if os.IsExist(err) || // gets thrown on a double race condition when using O_TMPFILE and linkat
@@ -378,11 +365,7 @@ func (h *Handler) writeOneHTTPBlob(scope string, config *ScopeConfiguration, fil
 // then disk space will be reserved before writing (by a ProtoFileBehaver).
 // If the bytes to be written exceed |writeQuota| then the
 // partially or completely written file is discarded.
-//
-// With uploadProgressCallback:
-// The file has been successfully written if "error" remains 'io.EOF'.
-func writeFileFromReader(path, filename string, r io.Reader, anticipatedSize, writeQuota uint64,
-	uploadProgressCallback func(uint64, error)) (uint64, error) {
+func writeFileFromReader(path, filename string, r io.Reader, anticipatedSize, writeQuota uint64) (uint64, error) {
 	wp, err := protofile.IntentNew(path, filename)
 	if err != nil {
 		return 0, err
@@ -397,30 +380,18 @@ func writeFileFromReader(path, filename string, r io.Reader, anticipatedSize, wr
 
 	var bytesWritten uint64
 	var n int64
-	for err == nil {
-		if writeQuota > 0 && bytesWritten > writeQuota {
-			break
-		}
-		n, err = io.CopyN(w, r, reportProgressEveryBytes)
-		if err == nil || err == io.EOF {
-			bytesWritten += uint64(n)
-			uploadProgressCallback(bytesWritten, err)
-		}
+	if writeQuota > 0 {
+		n, err = io.CopyN(w, r, 1+int64(writeQuota-bytesWritten))
+	} else {
+		n, err = io.Copy(w, r)
 	}
+	bytesWritten += uint64(n)
 
 	if err != nil && err != io.EOF {
 		return bytesWritten, err
 	}
 	if writeQuota > 0 && bytesWritten > writeQuota {
-		// The file will be removed automatically due to the deferred w.Zap().
-		// XXX(mark): on err == io.EOF and a later blockwise writing, don't return here but keep the file instead.
-		uploadProgressCallback(bytesWritten, errFileTooLarge)
 		return bytesWritten, errFileTooLarge
 	}
-
-	err = w.Persist()
-	if err != nil {
-		uploadProgressCallback(bytesWritten, err)
-	}
-	return bytesWritten, err
+	return bytesWritten, w.Persist()
 }
