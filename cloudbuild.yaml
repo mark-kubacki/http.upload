@@ -3,9 +3,6 @@ timeout: 300s
 # machineType: 'N1_HIGHCPU_8'
 # It's handy to later browse the logs trying to learn if an error is common to all runs of a language.
 tags: ['golang', 'http', 'plugin']
-# Makes it easier to repurpose this file.
-substitutions:
-  _PROJECT_ROOT: 'blitznote.com/src/http.upload'
 
 steps:
 # 'gofmt' only cares for the format, and doesn't touch any dependencies.
@@ -56,23 +53,25 @@ steps:
     path: '/var/go/theirs'
   env: ['GOPATH=/var/go/theirs:/go:/usr/share/gocode', 'GO111MODULE=on']
   id: 'get dependencies'
-  args: ['mod', 'vendor']
+  args: ['mod', 'download']
 
 # Now come steps (in Gitlab this were one stage actually) common to most projects written in Golang.
 - <<: *use_go
   id: 'vet'
   waitFor: ['get dependencies']
+  env: ['GOPATH=/var/go/theirs:/go:/usr/share/gocode', 'GO111MODULE=on', 'GOPROXY=off']
   args: ['vet', './...']
 - <<: *use_go
   id: 'unittests'
   waitFor: ['get dependencies']
+  env: ['GOPATH=/var/go/theirs:/go:/usr/share/gocode', 'GO111MODULE=on', 'GOPROXY=off']
   args: ['test', '-v', './...']
 
 - &build_go
   <<: *use_go
   waitFor: ['get dependencies', 'vet', 'unittests']
   id: 'build linux amd64, Go current'
-  env: ['GOPATH=/var/go/theirs:/go:/usr/share/gocode', 'GO111MODULE=on', 'GOARCH=amd64', 'GOOS=linux']
+  env: ['GOPATH=/var/go/theirs:/go:/usr/share/gocode', 'GO111MODULE=on', 'GOARCH=amd64', 'GOOS=linux', 'GOPROXY=off']
   entrypoint: 'bash'
   args:
   - -c
@@ -90,11 +89,7 @@ steps:
       -e '/http.Handle/a\\thttp.Handle(scope+"/", uploadHandler)' \
     >$$D/example.go;
     cd $$D/;
-    if [[ -s "/go/src/${_PROJECT_ROOT}/go.mod" ]]; then
-      printf 'module main\nrequire ${_PROJECT_ROOT} v0.0.0\nreplace ${_PROJECT_ROOT} => /go/src/${_PROJECT_ROOT}\n' >go.mod;
-    else
-      printf 'module main\nrequire ${_PROJECT_ROOT} v0.0.0\nreplace ${_PROJECT_ROOT} => /workspace\n' >go.mod;
-    fi;
+    printf 'module main\nrequire blitznote.com/src/http.upload/v3 v3.0.0\nreplace blitznote.com/src/http.upload/v3 => /workspace\n' >go.mod;
 
     go build \
       -ldflags  "-s -w -buildid ''" \

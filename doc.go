@@ -12,4 +12,4 @@
 //
 // Absent any meaningful flags use the http.Handler implementation (see the following example).
 //
-package upload // import "blitznote.com/src/http.upload"
+package upload // import "blitznote.com/src/http.upload/v3"
