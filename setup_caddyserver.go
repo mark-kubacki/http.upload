@@ -12,7 +12,6 @@ import (
 	"strings"
 	"unicode"
 
-	"blitznote.com/src/http.upload/v3/signature.auth"
 	"github.com/caddyserver/caddy"
 	"github.com/caddyserver/caddy/caddyhttp/httpserver"
 	"golang.org/x/text/unicode/norm"
@@ -89,10 +88,7 @@ func parseCaddyConfig(c *caddy.Controller) (*HandlerConfiguration, error) {
 	}
 
 	for c.Next() {
-		config := ScopeConfiguration{}
-		config.TimestampTolerance = 1 << 2
-		config.IncomingHmacSecrets = make(auth.HmacSecrets)
-		config.UploadProgressCallback = noopUploadProgressCallback
+		config := NewDefaultConfiguration("")
 
 		scopes := c.RemainingArgs() // most likely only one path; but could be more
 		if len(scopes) == 0 {
@@ -217,7 +213,7 @@ func parseCaddyConfig(c *caddy.Controller) (*HandlerConfiguration, error) {
 		}
 
 		for idx := range scopes {
-			siteConfig.Scope[scopes[idx]] = &config
+			siteConfig.Scope[scopes[idx]] = config
 		}
 	}
 
