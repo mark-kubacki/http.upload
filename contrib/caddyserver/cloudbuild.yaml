@@ -1,0 +1,70 @@
+timeout: 120s
+tags: ['golang', 'http', 'caddyserver']
+
+steps:
+- name: 'gcr.io/cloud-builders/go:debian'
+  id: 'materialize a bootstrap main.go and go.mod'
+  entrypoint: 'bash'
+  args:
+  - -c
+  - |
+    printf "module caddy\n" >go.mod
+    cat >main.go <<EOF
+    package main
+    
+    import (
+      "github.com/caddyserver/caddy/caddy/caddymain"
+    
+      _ "blitznote.com/src/http.upload/v3"
+    )
+    
+    func main() {
+      caddymain.EnableTelemetry = false
+      caddymain.Run()
+    }
+    EOF
+    gofmt -w main.go
+    
+    go version
+
+- name: 'gcr.io/cloud-builders/go:debian'
+  id: 'go get dependencies'
+  env: ['GOPATH=/workspace/gopath:/usr/share/gocode', 'GO111MODULE=on']
+  args: ['mod', 'tidy']
+- name: 'gcr.io/cloud-builders/go:debian'
+  id: 'go build'
+  env: ['GOPATH=/workspace/gopath:/usr/share/gocode', 'GO111MODULE=on', 'GOPROXY=off']
+  args: [
+    'build',
+    '-tags', 'caddyserver0.9 caddyserver1.0',
+    '-o', 'caddyserver'
+  ]
+
+- name: 'gcr.io/cloud-builders/curl'
+  id: 'run integration test'
+  entrypoint: 'bash'
+  args:
+  - -c
+  - |
+    set -euxop pipefail
+    
+    ./caddyserver -plugins | grep -F upload
+    randomport=$$[ $$RANDOM%(65535 - 1024) + 1024 ]
+    set +x
+    
+    cat >Caddyfile <<EOF
+    localhost:$${randomport}
+    
+    upload /web/path {
+      to "$(realpath .)"
+      random_suffix_len 4
+    }
+    EOF
+
+    ./caddyserver &
+    sleep 0.2 # Allow for some time to start.
+    
+    curl -sfST caddyserver \
+      "http://localhost:${randomport}/web/path/caddyserver" && \
+    cmp caddyserver caddyserver_* && echo OK
+    kill %1 # Terminate it.
