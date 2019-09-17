@@ -4,6 +4,7 @@
 package upload
 
 import (
+	"path/filepath"
 	"sync"
 	"unicode"
 
@@ -54,6 +55,10 @@ type ScopeConfiguration struct {
 
 // NewDefaultConfiguration creates a new default configuration.
 func NewDefaultConfiguration(targetDirectory string) *ScopeConfiguration {
+	if targetDirectory != "" { // Primarily to strip any trailing slash (separator).
+		targetDirectory = filepath.Clean(targetDirectory)
+	}
+
 	cfg := ScopeConfiguration{
 		TimestampTolerance:  1 << 2,
 		WriteToPath:         targetDirectory,
