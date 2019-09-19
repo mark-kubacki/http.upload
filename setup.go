@@ -57,6 +57,7 @@ type ScopeConfiguration struct {
 func NewDefaultConfiguration(targetDirectory string) *ScopeConfiguration {
 	if targetDirectory != "" { // Primarily to strip any trailing slash (separator).
 		targetDirectory = filepath.Clean(targetDirectory)
+		unveil(targetDirectory, "rw")
 	}
 
 	cfg := ScopeConfiguration{
@@ -66,4 +67,15 @@ func NewDefaultConfiguration(targetDirectory string) *ScopeConfiguration {
 	}
 
 	return &cfg
+}
+
+// FinishSetup communicates any collected white- and blacklists to the operating system.
+//
+// Call this on systems and with seervers that support OS-based locking down.
+// Servers that feature a dynamic reconfiguration or the like should not call this.
+// Do not call this in unit tests.
+//
+// Subject to change, has only an effect on OpenBSD.
+func FinishSetup() error {
+	return unveilBlock()
 }
