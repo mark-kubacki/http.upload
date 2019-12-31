@@ -1,13 +1,4 @@
-﻿Copyright © 2016–2017 Mark Kubacki <mk@blitznote.com>
-All rights reserved.
-
-"You" or "Your" means an individual or a legal entity exercising rights
-under this license. For legal entities, "You" or "Your" includes any
-entity which controls, is controlled by, or is under common control with,
-You, where "control" means (a) the power, direct or indirect, to cause
-the direction or management of such entity, whether by contract or
-otherwise, or (b) ownership of fifty percent (50%) or more of the
-outstanding shares or beneficial ownership of such entity.
+Copyright © 2016–2020 Mark Kubacki.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -24,35 +15,6 @@ distribution.
    * Neither the name of the copyright holder nor the names of its
 contributors may be used to endorse or promote products derived from
 this software without specific prior written permission.
-
-   * This license will not be construed as creating an agency,
-partnership, joint venture, or any other form of legal association
-between or among You, the copyright holder, or any contributor, and
-You will not represent to the contrary, whether expressly, by
-implication, appearance, or otherwise.
-
-   * You do not conduct, endorse, promote, assist in or authorize
-offenses against privacy. Nor do you train how to do so, or create,
-alter, install, maintain or operate tools with the effect of, intention
-to, or designed for the purpose of decreasing privacy; with the exception
-of a communication you are a sender or receiver thereof, or overtly
-monitoring your own premises, or to the absolute unavoidable minimum iff
-being a service provider for the sender or receiver and having a specific
-prior written permission of the sender or receiver.
-     Offenses against privacy include, but are not limited to:
-   - mass surveillance, "dragnet" surveillance, warrantless wiretapping,
-     wiretapping for preventive purposes, monitoring or interception
-     of communication,
-   - collection of communication metadata, collection of or accessing
-     stored communication, obtaining communications information,
-   - tampering with private communications,
-   - decryption of messages,
-   - aural transfer,
-   - and/or storing, transmitting and/or accessing metadata and/or messages
-     obtained by a means decreasing and/or offending privacy as expressed
-     above.
-This even applies if no reasonable expection of privacy can be assumed,
-and even if it is deemed being "lawful" to do so.
 
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
 "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
