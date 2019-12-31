@@ -8,7 +8,7 @@ import (
 	"sync"
 	"unicode"
 
-	"blitznote.com/src/http.upload/v3/signature.auth"
+	"blitznote.com/src/http.upload/v4/signature.auth"
 	"golang.org/x/text/unicode/norm"
 )
 

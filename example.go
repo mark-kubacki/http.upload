@@ -13,7 +13,7 @@ import (
 	"net/http"
 	"os"
 
-	"blitznote.com/src/http.upload/v3"
+	"blitznote.com/src/http.upload/v4"
 )
 
 func main() {

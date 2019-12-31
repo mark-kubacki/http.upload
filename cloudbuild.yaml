@@ -37,7 +37,7 @@ steps:
   args:
   - -c
   - |
-    rm -f go.sum *caddyserver*.go;
+    rm -f go.sum;
     export RELEASE="$$(date --utc +'%Y-Q3')";
     if gsutil cp gs://cache_cloudbuild/http.upload/dependencies-$${RELEASE}.tar.xz ./; then
       tar -C /var/go/theirs/ -xaf "dependencies-$${RELEASE}.tar.xz" && rm "dependencies-$${RELEASE}.tar.xz";
@@ -89,7 +89,7 @@ steps:
       -e '/http.Handle/a\\thttp.Handle(scope+"/", uploadHandler)' \
     >$$D/example.go;
     cd $$D/;
-    printf 'module main\nrequire blitznote.com/src/http.upload/v3 v3.0.0\nreplace blitznote.com/src/http.upload/v3 => /workspace\n' >go.mod;
+    printf 'module main\nrequire blitznote.com/src/http.upload/v4 v4.0.0\nreplace blitznote.com/src/http.upload/v4 => /workspace\n' >go.mod;
 
     go build \
       -ldflags  "-s -w -buildid ''" \

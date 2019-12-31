@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"blitznote.com/src/http.upload/v3/signature.auth"
+	"blitznote.com/src/http.upload/v4/signature.auth"
 	"blitznote.com/src/protofile"
 	"github.com/pkg/errors"
 	"golang.org/x/text/unicode/norm"
@@ -77,7 +77,7 @@ func (h *Handler) serveHTTP(w http.ResponseWriter, r *http.Request,
 			config.IncomingHmacSecretsLock.RUnlock()
 
 			if config.SilenceAuthErrors {
-				log.Printf("[WARNING] upload/auth: Request not authorized: %v", err) // Caddy has no proper logging atm
+				log.Printf("[WARNING] upload/auth: Request not authorized: %v", err)
 				return nextFn(w, r)
 			}
 			resp := err.SuggestedResponseCode()

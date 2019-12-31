@@ -1,4 +1,4 @@
-module blitznote.com/src/http.upload/v3
+module blitznote.com/src/http.upload/v4
 
 require (
 	blitznote.com/src/protofile v1.0.0
