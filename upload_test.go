@@ -15,6 +15,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"unicode"
 
 	. "github.com/smartystreets/goconvey/convey"
 )
@@ -253,6 +254,36 @@ func TestUpload_ServeHTTP(t *testing.T) {
 
 			tempFName := tempFileName()
 			req, err := http.NewRequest("PUT", "/nop/../../../tmp/../"+tempFName, strings.NewReader("DELME"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			req.Header.Set("Content-Length", "5")
+
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, req)
+			resp := w.Result()
+			ioutil.ReadAll(resp.Body)
+			So(resp.StatusCode, ShouldEqual, 422)
+		})
+
+		Convey("rejects paths that contain unexpected alphabets", func() {
+			cfg := NewDefaultConfiguration(scratchDir)
+			azOnly := unicode.RangeTable{
+				R16: []unicode.Range16{
+					{0x002f, 0x002f, 1}, // A lone '/' to enable sub-dirs.
+					{0x0061, 0x007a, 1}, // a-z, excludes '0' used below.
+				},
+				LatinOffset: 1,
+			}
+			cfg.RestrictFilenamesTo = []*unicode.RangeTable{&azOnly}
+			// Bypass http.ServeMux becuase it interferes with path parsing.
+			h, _ := NewHandler("/", cfg, next)
+
+			tempFName := tempFileName() // The name is in a-z by design.
+			// Feed it a '0' which is outside the given ranges, i. e. unexpected,
+			// and not in the filename but within the full path to avoid the common
+			// oversight of merely focusing on filenames and getting exploits through elsewhere.
+			req, err := http.NewRequest("PUT", "/fo0/"+tempFName, strings.NewReader("DELME"))
 			if err != nil {
 				t.Fatal(err)
 			}
