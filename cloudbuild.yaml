@@ -26,25 +26,6 @@ steps:
   id: 'lint'
   waitFor: ['gofmt']
 
-# It's always good to cache dependencies for network connections and third-party services can be subject to interruptions and outages.
-- name: 'gcr.io/cloud-builders/gsutil'
-  waitFor: ['gofmt', 'ineffassign', 'lint']
-  volumes:
-  - name: 'third-party-sources'
-    path: '/var/go/theirs'
-  id: 'get cache'
-  entrypoint: 'bash'
-  args:
-  - -c
-  - |
-    rm -f go.sum;
-    export RELEASE="$$(date --utc +'%Y-Q3')";
-    if gsutil cp gs://cache_cloudbuild/http.upload/dependencies-$${RELEASE}.tar.xz ./; then
-      tar -C /var/go/theirs/ -xaf "dependencies-$${RELEASE}.tar.xz" && rm "dependencies-$${RELEASE}.tar.xz";
-    else
-      exit 0;
-    fi
-
 # Now get any remaining dependencies of this plugin.
 - &use_go
   name: 'gcr.io/cloud-builders/go:debian'
@@ -149,26 +130,3 @@ steps:
     test -s $${TMPDIR}/first-image_????.jpg;
 
     kill %1
-
-# Do not uncomment this as Google Cloud Build for Github lacks the permissions to perform this step.
-# Mark needs to issue the build separately, using a different account, for this to succeed.
-#- name: 'docker.io/blitznote/debase:16.04'
-#  waitFor: ['build linux amd64, Go current']
-#  id: 'store dependencies'
-#  volumes:
-#  - name: 'third-party-sources'
-#    path: '/var/go/theirs'
-#  entrypoint: 'bash'
-#  args:
-#  - -c
-#  - |
-#    tar -C /var/go/theirs/ --sort=name \
-#      --numeric-owner --owner=0 --group=0 \
-#      --no-acls --no-selinux --no-xattrs \
-#      --xz -cf "dependencies-$$(date --utc +'%Y-Q3').tar.xz" \
-#        $$(ls -1 /var/go/theirs)
-
-#artifacts:
-#  objects:
-#    location: 'gs://cache_cloudbuild/http.upload/'
-#    paths: ['dependencies-*']
