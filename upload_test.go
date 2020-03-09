@@ -326,6 +326,38 @@ func TestUpload_ServeHTTP(t *testing.T) {
 			compareContents(filepath.Join(scratchDir, tempFName2), []byte("REMOVEME"))
 		})
 
+		Convey("will create sub-directories when needed", func() {
+			tempFName := tempFileName()
+
+			// START
+			body := &bytes.Buffer{}
+			writer := multipart.NewWriter(body)
+			p, _ := writer.CreateFormFile("A", tempFName)
+			p.Write([]byte("REMOVEME"))
+			p, _ = writer.CreateFormFile("B", "foo/"+tempFName) // '/' is always the separator.
+			p.Write([]byte("DELME"))
+			writer.Close()
+			// END
+
+			req, err := http.NewRequest("POST", "/", body)
+			req.Header.Set("Content-Type", writer.FormDataContentType())
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() {
+				os.Remove(filepath.Join(scratchDir, tempFName))
+			}()
+
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, req)
+			resp := w.Result()
+			ioutil.ReadAll(resp.Body)
+
+			So(resp.StatusCode, ShouldEqual, 201)
+
+			compareContents(filepath.Join(scratchDir, "foo", tempFName), []byte("DELME"))
+		})
+
 		Convey("succeeds if two files have the same name (overwriting within the same transaction)", func() {
 			tempFName := tempFileName()
 
