@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"crypto/rand"
 	"io/ioutil"
+	"log"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -43,7 +44,11 @@ func (n teapotHandler) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 }
 
 func init() {
-	scratchDir = os.TempDir()
+	var err error
+	scratchDir, err = ioutil.TempDir("", "http-upload-test")
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	t := http.NewServeMux()
 	{

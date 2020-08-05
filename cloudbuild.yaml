@@ -32,6 +32,8 @@ steps:
   volumes:
   - name: 'go-modules'
     path: '/go'
+  - name: 'tmpfs'
+    path: '/tmp'
   env: ['GOPATH=/go:/usr/share/gocode', 'GO111MODULE=on']
   id: 'get dependencies'
   entrypoint: '/usr/local/go/bin/go'
@@ -93,11 +95,14 @@ steps:
 - name: 'gcr.io/cloud-builders/curl'
   waitFor: ['build linux amd64, Go current']
   id: 'integration test, example from doc'
+  volumes:
+  - name: 'tmpfs'
+    path: '/tmp'
   entrypoint: 'bash'
   args:
   - -c
   - |
-    : $${TMPDIR:="/tmp"}
+    export TMPDIR="$(mktemp -d)"
     set -eux;
     /workspace/http.upload~amd64_linux & sleep 0.2;
 
@@ -117,11 +122,14 @@ steps:
 - name: 'gcr.io/cloud-builders/curl'
   waitFor: ['build linux amd64, Go current']
   id: 'integration test, image upload'
+  volumes:
+  - name: 'tmpfs'
+    path: '/tmp'
   entrypoint: 'bash'
   args:
   - -c
   - |
-    : $${TMPDIR:="/tmp"}
+    export TMPDIR="$(mktemp -d)"
     set -eux;
     /workspace/http.upload.randsuffix4~amd64_linux & sleep 0.2;
 

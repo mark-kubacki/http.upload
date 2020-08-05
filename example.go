@@ -22,6 +22,9 @@ func main() {
 		directory = os.TempDir()
 		next      = http.FileServer(http.Dir(directory))
 	)
+	if otherTempDir, present := os.LookupEnv("TMPDIR"); present {
+		directory = otherTempDir
+	}
 
 	cfg := upload.NewDefaultConfiguration(directory)
 	cfg.EnableWebdav = true
