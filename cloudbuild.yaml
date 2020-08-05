@@ -7,7 +7,7 @@ tags: ['golang', 'http', 'plugin']
 steps:
 # 'gofmt' only cares for the format, and doesn't touch any dependencies.
 # It's a nice gatekeeper before any downloads, and to date any recent Go version will do.
-- name: 'gcr.io/cloud-builders/go:debian'
+- name: 'golang'
   id: 'gofmt'
   entrypoint: 'bash'
   args: ['-c', 'diff <(echo -n) <(gofmt -s -d $(find . -type f -name "*.go" -not -path "./_*"))']
@@ -28,31 +28,32 @@ steps:
 
 # Now get any remaining dependencies of this plugin.
 - &use_go
-  name: 'gcr.io/cloud-builders/go:debian'
+  name: 'golang'
   volumes:
-  - name: 'third-party-sources'
-    path: '/var/go/theirs'
-  env: ['GOPATH=/var/go/theirs:/go:/usr/share/gocode', 'GO111MODULE=on']
+  - name: 'go-modules'
+    path: '/go'
+  env: ['GOPATH=/go:/usr/share/gocode', 'GO111MODULE=on']
   id: 'get dependencies'
+  entrypoint: '/usr/local/go/bin/go'
   args: ['mod', 'download']
 
 # Now come steps (in Gitlab this were one stage actually) common to most projects written in Golang.
 - <<: *use_go
   id: 'vet'
   waitFor: ['get dependencies']
-  env: ['GOPATH=/var/go/theirs:/go:/usr/share/gocode', 'GO111MODULE=on', 'GOPROXY=off']
+  env: ['GOPATH=/go:/usr/share/gocode', 'GO111MODULE=on', 'GOPROXY=off']
   args: ['vet', './...']
 - <<: *use_go
   id: 'unittests'
   waitFor: ['get dependencies']
-  env: ['GOPATH=/var/go/theirs:/go:/usr/share/gocode', 'GO111MODULE=on', 'GOPROXY=off']
+  env: ['GOPATH=/go:/usr/share/gocode', 'GO111MODULE=on', 'GOPROXY=off']
   args: ['test', '-v', './...']
 
 - &build_go
   <<: *use_go
   waitFor: ['get dependencies', 'vet', 'unittests']
   id: 'build linux amd64, Go current'
-  env: ['GOPATH=/var/go/theirs:/go:/usr/share/gocode', 'GO111MODULE=on', 'GOARCH=amd64', 'GOOS=linux', 'GOPROXY=off']
+  env: ['GOPATH=/go:/usr/share/gocode', 'GO111MODULE=on', 'GOARCH=amd64', 'GOOS=linux', 'GOPROXY=off']
   entrypoint: 'bash'
   args:
   - -c
