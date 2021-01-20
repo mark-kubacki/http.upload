@@ -5,8 +5,6 @@ Upload for HTTP servers
 
 Enables you to upload files, such as build artifacts, to your HTTP server instance.
 
-Use this with the built-in authentication, or a different authentication plugin such as **jwt**.
-
 Licensed under a [BSD-style license](LICENSE).
 
 Highlights
@@ -17,9 +15,6 @@ Highlights
  * imposes limits on filenames:
    * rejects those that are not conforming to Unicode NFC or NFD
    * rejects any comprised of unexpected alphabets ϟ(ツ)╯
- * checks request authorization using scheme **Signature**
- * can be configured to silently discard unauthorized requests
- * (Linux only) files appear after having been written completely, not before
  * limits to file- and transaction sizes independent from any *transport encoding*
 
 Versions
@@ -32,9 +27,6 @@ Version | Change
 
 Warnings
 --------
-
-Use TLS when uploading, or your data and authorization tokens can be intercepted by
-third parties and used against you.
 
 This plugin reveals some errors thrown by your filesystem implementation to the uploader,
 for example about insufficient space on the target device..
@@ -59,10 +51,6 @@ upload <path> {
 
 	max_filesize          0..N
 	max_transaction_size  0..N
-
-	hmac_keys_in          <keyid_0=base64(binary)> [<keyid_1=base64(binary)>| …]
-	timestamp_tolerance   <0..32>
-	silent_auth_errors
 }
 ```
 
@@ -113,19 +101,6 @@ ignorant of any encoding. Set a limit of about 1.4× to 2.05× the *max_transact
 This plugin writes files blockwise for a better performance. Limits are rounded up by a few kilobytes to
 the next full block.
 
-Optional, but required if you want to use the built-in authorization feature:
-
- * **hmac_keys_in** is a space-delimited list of `username → shared secret` associations.  
-   The latter is binary data, encoded using *base64*, with a recommended length of 32 octets.
- * **timestamp_tolerance** sets the validity of a request with *authorization*,
-   and is used to account for clock drift difference between the uploader's and the server's computer.  
-   It is given as power of 2, and its default value is 2 (as in: ± four seconds = 1<<2 = 2**2).
-   Set this to 1 or 0 with reliably synchronized clocks.
- * **silent_auth_errors**, if set the plugin's built-in authorization will return no HTTP errors of its own.  
-   Instead, the request will be handed over to the next middleware, which
-   then will most probably return a HTTP error.
-   This is a cheap way to obscure that your site accepts uploads.
-
 Tutorial
 --------
 
@@ -171,55 +146,6 @@ curl -X DELETE \
   https://127.0.0.1/web/path/to-release
 ```
 
-Authorization: Signature
-------------------------
-
-This plugin comes with support for *request authorization* scheme **Signature**,
-though does not support its *realms* or any other *algorithm* than **hmac-sha256**.  
-It's a HMAC scheme with a pre-shared secret and nonce||timestamp.
-
-Send header **Authorization** and two other, formatted like this, with every upload request:
-
-```
-Authorization: Signature keyId="(username)",algorithm="hmac-sha256",headers="timestamp token",signature="(see below)"
-Timestamp: (current UNIX time)
-Token: (a nonce)
-```
-
-You can generate new keys (passwords, pre-shared keys) using BASH and OpenSSL, and encode them to *base64*:
-
-```bash
-SECRET="$(openssl rand -base64 32)"
-
-# printf "%s\n" "${SECRET}"
-# TWF0dCBIb2x0IGRvZXNuJ3QgdXBkYXRlIGhpcyBNYWM=
-```
-
-A full script for uploading something would be:
-
-```bash
-#!/bin/bash
-# hmac_keys_in mark=Z2VoZWlt
-#
-UPLOADER="mark"
-SECRET="geheim"
-
-TIMESTAMP="$(date --utc +%s)"
-# length and contents are not important, "abcdef" would work as well
-NONCE="$(cat /dev/urandom | tr -d -c '[:alnum:]' | head -c $(( 32 - ${#TIMESTAMP} )))"
-
-SIGNATURE="$(printf "${TIMESTAMP}${NONCE}" \
-             | openssl dgst -sha256 -hmac "${SECRET}" -binary \
-             | openssl enc -base64)"
-
-# order does not matter; any skipped fields in Authorization will be set to defaults
-exec curl -T \
-  --header "Timestamp: ${TIMESTAMP}" \
-  --header "Token: ${NONCE}" \
-  --header "Authorization: Signature keyId='${UPLOADER}',signature='${SIGNATURE}'" \
-  "<filename>" "<url>"
-```
-
 Configuration Examples
 ----------------------
 
@@ -240,7 +166,6 @@ A host for Linux distribution packages can be more restrictive:
 upload /binhost/gentoo {
 	to "/var/portage/packages"
 	filenames_in u0000–u007F
-	timestamp_tolerance 0
 }
 tls {
 	…
@@ -248,7 +173,7 @@ tls {
 }
 ```
 
-… while someone in East Asia would share space on his blog with three friends like this:
+… while someone in East Asia would share space on his blog like this:
 
 ```
 upload /wp-uploads {
@@ -256,11 +181,6 @@ upload /wp-uploads {
 	enable_webdav
 	max_filesize 16777216
 	filenames_in u0000–u007F u0100–u017F u0391–u03C9 u2018–u203D u3000–u303f u3040–u309f u30a0–u30ff u4e00–9faf uff00–uffef
-
-	timestamp_tolerance 3
-	silent_auth_errors
-
-	hmac_keys_in yui=eXVp hina=aGluYQ== olivia=b2xpdmlh james=amFtZXM=
 }
 ```
 
@@ -272,9 +192,3 @@ http://jrgraphix.net/research/unicode_blocks.php
 
 Here is the official list of Unicode blocks:  
 http://www.unicode.org/Public/UCD/latest/ucd/Blocks.txt
-
-For *Authorization: Signature* please see:
-
- * https://tools.ietf.org/html/draft-cavage-http-signatures-05
- * github.com/joyent/gosign is an implementation in Golang,
- * github.com/joyent/node-http-signature for Node.js.

@@ -5,20 +5,13 @@ package upload
 
 import (
 	"path/filepath"
-	"sync"
 	"unicode"
 
-	auth "blitznote.com/src/http.upload/v5/signature.auth"
 	"golang.org/x/text/unicode/norm"
 )
 
 // ScopeConfiguration represents the settings of a scope (URL path).
 type ScopeConfiguration struct {
-	// How big a difference between 'now' and the provided timestamp do we tolerate?
-	// In seconds. Due to possible optimizations this should be an order of 2.
-	// A reasonable default is 1<<2.
-	TimestampTolerance uint64
-
 	MaxFilesize        int64
 	MaxTransactionSize int64
 
@@ -28,17 +21,6 @@ type ScopeConfiguration struct {
 	// Uploaded files can be gotten back from here.
 	// If ≠ "" this will trigger sending headers such as "Location".
 	ApparentLocation string
-
-	// Maps KeyIDs to shared secrets.
-	// Here the latter are already decoded from base64 to binary.
-	// Request verification is disabled if this is empty.
-	IncomingHmacSecrets     auth.HmacSecrets
-	IncomingHmacSecretsLock sync.RWMutex
-
-	// If false, this plugin returns HTTP Errors.
-	// If true, passes the given request to the next middleware
-	// which could respond with an Error of its own, poorly obscuring where this plugin is used.
-	SilenceAuthErrors bool
 
 	// Enables MOVE, DELETE, and similar. Without this only POST and PUT will be recognized.
 	EnableWebdav bool
@@ -61,9 +43,7 @@ func NewDefaultConfiguration(targetDirectory string) *ScopeConfiguration {
 	}
 
 	cfg := ScopeConfiguration{
-		TimestampTolerance:  1 << 2,
-		WriteToPath:         targetDirectory,
-		IncomingHmacSecrets: make(auth.HmacSecrets),
+		WriteToPath: targetDirectory,
 	}
 
 	return &cfg

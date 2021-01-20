@@ -6,16 +6,13 @@ package upload
 import (
 	"io"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
-	"time"
 
-	auth "blitznote.com/src/http.upload/v5/signature.auth"
 	"blitznote.com/src/protofile/v2"
 	"github.com/pkg/errors"
 	"golang.org/x/text/unicode/norm"
@@ -29,7 +26,6 @@ const (
 	errNoDestination           coreUploadError = "A destination is missing"
 	errUnknownEnvelopeFormat   coreUploadError = "Unknown envelope format"
 	errLengthInvalid           coreUploadError = "Field 'length' has been set, but is invalid"
-	errWebdavDisabled          coreUploadError = "WebDAV has been disabled"
 	errFileTooLarge            coreUploadError = "The uploaded file exceeds or would exceed max_filesize"
 	errTransactionTooLarge     coreUploadError = "Upload(s) do or will exceed max_transaction_size"
 )
@@ -40,14 +36,6 @@ type coreUploadError string
 
 // Error implements the error interface.
 func (e coreUploadError) Error() string { return string(e) }
-
-// getTimestamp returns the current time as unix timestamp.
-//
-// Do not inline this one: Mark overwrites it for his flavour of Go.
-var getTimestamp = func(r *http.Request) uint64 {
-	t := time.Now().Unix()
-	return uint64(t)
-}
 
 // ServeHTTP catches methods meant for file manipulation, else is a passthrough.
 // Directs HTTP methods and fields to the corresponding function calls.
@@ -64,33 +52,10 @@ func (h *Handler) serveHTTP(w http.ResponseWriter, r *http.Request,
 		if config.EnableWebdav { // also allow any other methods
 			break
 		}
-
-		if !config.SilenceAuthErrors {
-			return http.StatusMethodNotAllowed, errWebdavDisabled
-		}
 		fallthrough
 	default:
 		return nextFn(w, r)
 	}
-
-	config.IncomingHmacSecretsLock.RLock()
-	if len(config.IncomingHmacSecrets) > 0 {
-		if err := auth.Authenticate(r.Header, config.IncomingHmacSecrets, getTimestamp(r), config.TimestampTolerance); err != nil {
-			config.IncomingHmacSecretsLock.RUnlock()
-
-			if config.SilenceAuthErrors {
-				log.Printf("[WARNING] upload/auth: Request not authorized: %v", err)
-				return nextFn(w, r)
-			}
-			resp := err.SuggestedResponseCode()
-			if resp == http.StatusUnauthorized {
-				// send this header to prevent the user from being asked for a username/password pair
-				w.Header().Set("WWW-Authenticate", "Signature")
-			}
-			return resp, err
-		}
-	}
-	config.IncomingHmacSecretsLock.RUnlock()
 
 	switch r.Method {
 	case "COPY":
