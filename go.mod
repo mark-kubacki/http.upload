@@ -1,4 +1,4 @@
-module blitznote.com/src/http.upload/v4
+module blitznote.com/src/http.upload/v5
 
 go 1.16
 

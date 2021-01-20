@@ -4,4 +4,4 @@
 // Package upload contains a HTTP handler
 // that provides facilities for uploading files.
 //
-package upload // import "blitznote.com/src/http.upload/v4"
+package upload

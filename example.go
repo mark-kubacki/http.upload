@@ -13,18 +13,16 @@ import (
 	"net/http"
 	"os"
 
-	"blitznote.com/src/http.upload/v4"
+	upload "blitznote.com/src/http.upload/v5"
 )
 
 func main() {
-	var (
-		scope     = "/"
-		directory = os.TempDir()
-		next      = http.FileServer(http.Dir(directory))
-	)
+	var scope = "/"
+	directory := os.TempDir()
 	if otherTempDir, present := os.LookupEnv("TMPDIR"); present {
 		directory = otherTempDir
 	}
+	next := http.FileServer(http.Dir(directory))
 
 	cfg := upload.NewDefaultConfiguration(directory)
 	cfg.EnableWebdav = true

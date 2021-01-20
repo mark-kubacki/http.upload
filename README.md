@@ -1,7 +1,7 @@
 Upload for HTTP servers
 =======================
 
-[![PkgGoDev](https://pkg.go.dev/badge/blitznote.com/src/http.upload/v4)](https://pkg.go.dev/blitznote.com/src/http.upload/v4)
+[![PkgGoDev](https://pkg.go.dev/badge/blitznote.com/src/http.upload/v5)](https://pkg.go.dev/blitznote.com/src/http.upload/v5)
 
 Enables you to upload files, such as build artifacts, to your HTTP server instance.
 
@@ -27,7 +27,6 @@ Versions
 
 Version | Change
 ------- | ------
-/v3     | The last version to come with wrappers for some webservers.
 /v4     | Call to `http.Handler` is henceforth the preferred way to use this.
 /v5     | No longer limited to local filesystems as backend, the syntax for `to` (`WriteToPath`) has changed.
 

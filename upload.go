@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	auth "blitznote.com/src/http.upload/v4/signature.auth"
+	auth "blitznote.com/src/http.upload/v5/signature.auth"
 	"blitznote.com/src/protofile/v2"
 	"github.com/pkg/errors"
 	"golang.org/x/text/unicode/norm"
