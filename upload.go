@@ -5,16 +5,18 @@ package upload
 
 import (
 	"io"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
 
-	"blitznote.com/src/http.upload/v4/signature.auth"
-	"blitznote.com/src/protofile"
+	auth "blitznote.com/src/http.upload/v4/signature.auth"
+	"blitznote.com/src/protofile/v2"
 	"github.com/pkg/errors"
 	"golang.org/x/text/unicode/norm"
 )
@@ -123,10 +125,10 @@ func (h *Handler) serveHTTP(w http.ResponseWriter, r *http.Request,
 			writeQuota, overQuotaErr = config.MaxFilesize, errFileTooLarge
 		}
 
-		var expectBytes uint64
+		var expectBytes int64
 		if r.Header.Get("Content-Length") != "" { // unfortunately, sending this header is optional
 			var perr error
-			expectBytes, perr = strconv.ParseUint(r.Header.Get("Content-Length"), 10, 64)
+			expectBytes, perr = strconv.ParseInt(r.Header.Get("Content-Length"), 10, 64)
 			if perr != nil || expectBytes < 0 {
 				return http.StatusBadRequest, errLengthInvalid
 			}
@@ -164,7 +166,7 @@ func (h *Handler) serveMultipartUpload(w http.ResponseWriter, r *http.Request,
 		return http.StatusUnsupportedMediaType, errCannotReadMIMEMultipart
 	}
 
-	var bytesWrittenInTransaction uint64
+	var bytesWrittenInTransaction int64
 
 	for partNum := 1; ; partNum++ {
 		part, err := mr.NextPart()
@@ -190,9 +192,9 @@ func (h *Handler) serveMultipartUpload(w http.ResponseWriter, r *http.Request,
 			}
 		}
 
-		var expectBytes uint64
+		var expectBytes int64
 		if part.Header.Get("Content-Length") != "" {
-			expectBytes, err = strconv.ParseUint(part.Header.Get("Content-Length"), 10, 64)
+			expectBytes, err = strconv.ParseInt(part.Header.Get("Content-Length"), 10, 64)
 			if err != nil || expectBytes < 0 {
 				return http.StatusBadRequest, errLengthInvalid
 			}
@@ -319,7 +321,7 @@ func (h *Handler) deleteOneFile(scope string, config *ScopeConfiguration, fileNa
 //
 // Returns |bytesWritten|, |locationOnDisk|, |suggestHTTPResponseCode|, error.
 func (h *Handler) writeOneHTTPBlob(scope string, config *ScopeConfiguration, fileName string,
-	expectBytes, writeQuota uint64, r io.Reader) (uint64, string, int, error) {
+	expectBytes, writeQuota int64, r io.Reader) (int64, string, int, error) {
 	path, fname, err := h.translateForFilesystem(scope, fileName, config)
 	if err != nil {
 		return 0, "", http.StatusUnprocessableEntity, err // 422: unprocessable entity
@@ -361,31 +363,36 @@ func (h *Handler) writeOneHTTPBlob(scope string, config *ScopeConfiguration, fil
 // • discarding it on failure ('zap') or
 // • its "emergence" ('persist') into observable namespace.
 //
-// If 'anticipatedSize' ≥ protofile.reserveFileSizeThreshold (usually 32 KiB)
-// then disk space will be reserved before writing (by a ProtoFileBehaver).
 // If the bytes to be written exceed |writeQuota| then the
 // partially or completely written file is discarded.
-func writeFileFromReader(path, filename string, r io.Reader, anticipatedSize, writeQuota uint64) (uint64, error) {
-	wp, err := protofile.IntentNew(path, filename)
+func writeFileFromReader(path, filename string, r io.Reader, anticipatedSize, writeQuota int64) (int64, error) {
+	err := os.MkdirAll(path, os.FileMode(0755))
 	if err != nil {
 		return 0, err
 	}
-	w := *wp
-	defer w.Zap()
-
-	err = w.SizeWillBe(anticipatedSize) // if > writeQuota then this could be a sparse file
+	w, err := protofile.CreateTemp(path) // Wraps ioutil.TempFile on Windows.
+	if protofile.IsTempfileNotSupported(err) {
+		w, err = ioutil.TempFile(path, ".*")
+		defer os.Remove(w.Name())
+	}
 	if err != nil {
 		return 0, err
 	}
+	if runtime.GOOS == "windows" {
+		defer os.Remove(w.Name())
+	}
+	defer w.Close()
 
-	var bytesWritten uint64
-	var n int64
+	if anticipatedSize > 4096 {
+		w.Truncate(anticipatedSize)
+	}
+
+	var bytesWritten int64
 	if writeQuota > 0 {
-		n, err = io.CopyN(w, r, 1+int64(writeQuota-bytesWritten))
+		bytesWritten, err = io.CopyN(w, r, 1+int64(writeQuota-bytesWritten))
 	} else {
-		n, err = io.Copy(w, r)
+		bytesWritten, err = io.Copy(w, r)
 	}
-	bytesWritten += uint64(n)
 
 	if err != nil && err != io.EOF {
 		return bytesWritten, err
@@ -393,5 +400,32 @@ func writeFileFromReader(path, filename string, r io.Reader, anticipatedSize, wr
 	if writeQuota > 0 && bytesWritten > writeQuota {
 		return bytesWritten, errFileTooLarge
 	}
-	return bytesWritten, w.Persist()
+
+	finalName := filepath.Join(path, filename)
+	if runtime.GOOS == "windows" {
+		err = w.Close()
+		if err != nil {
+			return bytesWritten, err
+		}
+		err = os.Rename(w.Name(), finalName)
+		if os.IsExist(err) {
+			if finfo, _ := os.Stat(finalName); !finfo.IsDir() {
+				os.Remove(finalName)
+				err = os.Rename(w.Name(), finalName)
+			}
+		}
+		return bytesWritten, err
+	}
+	err = protofile.Hardlink(w, finalName)
+	if os.IsExist(err) {
+		if finfo, _ := os.Stat(finalName); !finfo.IsDir() {
+			os.Remove(finalName)
+			err = protofile.Hardlink(w, finalName)
+		}
+	}
+	if err != nil {
+		w.Close()
+		return bytesWritten, err
+	}
+	return bytesWritten, w.Close()
 }

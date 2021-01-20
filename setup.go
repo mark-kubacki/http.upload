@@ -8,7 +8,7 @@ import (
 	"sync"
 	"unicode"
 
-	"blitznote.com/src/http.upload/v4/signature.auth"
+	auth "blitznote.com/src/http.upload/v4/signature.auth"
 	"golang.org/x/text/unicode/norm"
 )
 
@@ -19,8 +19,8 @@ type ScopeConfiguration struct {
 	// A reasonable default is 1<<2.
 	TimestampTolerance uint64
 
-	MaxFilesize        uint64
-	MaxTransactionSize uint64
+	MaxFilesize        int64
+	MaxTransactionSize int64
 
 	// Target directory on disk that serves as upload destination.
 	WriteToPath string
