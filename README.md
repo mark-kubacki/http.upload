@@ -37,7 +37,7 @@ in any files you are uploading being held in memory for the duration of the uplo
 Configuration Syntax
 --------------------
 
-Let this be a legible shorthand for instances of `ScopeConfiguration`:
+Let this be a legible shorthand for instances of `Handler`:
 
 ```
 upload <path> {
@@ -56,8 +56,8 @@ upload <path> {
 
 These settings are required:
 
- * **path** is the *scope* below which the plugin will react to any *uploads*.
-   It will be stripped and no part of any resulting file and directories.
+ * **path** is the *Scope* you cofigured the handler for, such as Go's `ServeMux`.
+   It will be stripped and won't be part of any resulting file and directories.
  * **to** is an existing target directory. Must be a quoted absolute path.
    When using Linux it is recommended to place this on a filesystem which supports
    **O_TMPFILE**, such as (but not limited to) *ext4* or *XFS*.

@@ -24,9 +24,8 @@ func main() {
 	}
 	next := http.FileServer(http.Dir(directory))
 
-	cfg := upload.NewDefaultConfiguration(directory)
-	cfg.EnableWebdav = true
-	uploadHandler, _ := upload.NewHandler(scope, cfg, next)
+	uploadHandler, _ := upload.NewHandler(scope, directory, next)
+	uploadHandler.EnableWebdav = true
 
 	http.Handle(scope, uploadHandler)
 	http.ListenAndServe(":9000", nil)

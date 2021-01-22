@@ -37,24 +37,33 @@ type coreUploadError string
 // Error implements the error interface.
 func (e coreUploadError) Error() string { return string(e) }
 
-// ServeHTTP catches methods meant for file manipulation, else is a passthrough.
-// Directs HTTP methods and fields to the corresponding function calls.
-func (h *Handler) serveHTTP(w http.ResponseWriter, r *http.Request,
-	scope string,
-	config *ScopeConfiguration,
-	nextFn func(http.ResponseWriter, *http.Request) (int, error),
-) (int, error) {
+// ServeHTTP catches methods meant for file manipulation.
+// Anything else will be delegated to h.Next, if not nil.
+func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	httpCode, err := h.serveHTTP(w, r)
 
+	if httpCode == http.StatusMethodNotAllowed && err == nil && h.Next != nil {
+		h.Next.ServeHTTP(w, r)
+		return
+	}
+	if httpCode >= 400 && err != nil {
+		http.Error(w, err.Error(), httpCode)
+	} else {
+		w.WriteHeader(httpCode)
+	}
+}
+
+func (h *Handler) serveHTTP(w http.ResponseWriter, r *http.Request) (int, error) {
 	switch r.Method {
 	case http.MethodPost, http.MethodPut:
 		// nop; always permitted
 	case "COPY", "MOVE", "DELETE":
-		if config.EnableWebdav { // also allow any other methods
+		if h.EnableWebdav { // also allow any other methods
 			break
 		}
 		fallthrough
 	default:
-		return nextFn(w, r)
+		return http.StatusMethodNotAllowed, nil
 	}
 
 	switch r.Method {
@@ -65,17 +74,17 @@ func (h *Handler) serveHTTP(w http.ResponseWriter, r *http.Request,
 		if len(r.URL.Path) < 2 || destName == "" {
 			return http.StatusBadRequest, errNoDestination
 		}
-		return h.moveOneFile(scope, config, r.URL.Path, destName)
+		return h.moveOneFile(r.URL.Path, destName)
 	case "DELETE":
 		if len(r.URL.Path) < 2 {
 			return http.StatusBadRequest, errNoDestination
 		}
-		return h.deleteOneFile(scope, config, r.URL.Path)
+		return h.deleteOneFile(r.URL.Path)
 	case http.MethodPost:
 		ctype := r.Header.Get("Content-Type")
 		switch {
 		case strings.HasPrefix(ctype, "multipart/form-data"):
-			return h.serveMultipartUpload(w, r, scope, config)
+			return h.serveMultipartUpload(w, r)
 		case ctype != "": // other envelope formats, not implemented
 			return http.StatusUnsupportedMediaType, errUnknownEnvelopeFormat
 		}
@@ -85,9 +94,9 @@ func (h *Handler) serveHTTP(w http.ResponseWriter, r *http.Request,
 			return http.StatusBadRequest, errNoDestination
 		}
 
-		writeQuota, overQuotaErr := config.MaxTransactionSize, errTransactionTooLarge
-		if writeQuota == 0 || (config.MaxFilesize > 0 && config.MaxFilesize < writeQuota) {
-			writeQuota, overQuotaErr = config.MaxFilesize, errFileTooLarge
+		writeQuota, overQuotaErr := h.MaxTransactionSize, errTransactionTooLarge
+		if writeQuota == 0 || (h.MaxFilesize > 0 && h.MaxFilesize < writeQuota) {
+			writeQuota, overQuotaErr = h.MaxFilesize, errFileTooLarge
 		}
 
 		var expectBytes int64
@@ -102,14 +111,14 @@ func (h *Handler) serveHTTP(w http.ResponseWriter, r *http.Request,
 			}
 		}
 
-		bytesWritten, locationOnDisk, retval, err := h.writeOneHTTPBlob(scope, config, r.URL.Path, expectBytes, writeQuota, r.Body)
+		bytesWritten, locationOnDisk, retval, err := h.writeOneHTTPBlob(r.URL.Path, expectBytes, writeQuota, r.Body)
 		if writeQuota > 0 && bytesWritten > writeQuota {
 			// The partially uploaded file gets discarded by writeOneHTTPBlob.
 			return http.StatusRequestEntityTooLarge, overQuotaErr
 		}
 
-		if err == nil && config.ApparentLocation != "" {
-			newApparentLocation := strings.Replace(locationOnDisk, config.WriteToPath, config.ApparentLocation, 1)
+		if err == nil && h.ApparentLocation != "" {
+			newApparentLocation := strings.Replace(locationOnDisk, h.WriteToPath, h.ApparentLocation, 1)
 			if strings.HasPrefix(newApparentLocation, "//") {
 				w.Header().Set("Location", newApparentLocation[1:])
 			} else {
@@ -118,14 +127,13 @@ func (h *Handler) serveHTTP(w http.ResponseWriter, r *http.Request,
 		}
 		return retval, err
 	default:
-		return nextFn(w, r)
+		return http.StatusMethodNotAllowed, nil
 	}
 }
 
 // serveMultipartUpload is used on HTTP POST to explode a MIME Multipart envelope
 // into one or more supplied files.
-func (h *Handler) serveMultipartUpload(w http.ResponseWriter, r *http.Request,
-	scope string, config *ScopeConfiguration) (int, error) {
+func (h *Handler) serveMultipartUpload(w http.ResponseWriter, r *http.Request) (int, error) {
 	mr, err := r.MultipartReader()
 	if err != nil {
 		return http.StatusUnsupportedMediaType, errCannotReadMIMEMultipart
@@ -147,13 +155,13 @@ func (h *Handler) serveMultipartUpload(w http.ResponseWriter, r *http.Request,
 			continue
 		}
 
-		writeQuota, overQuotaErr := config.MaxFilesize, errFileTooLarge
-		if config.MaxTransactionSize > 0 {
-			if bytesWrittenInTransaction >= config.MaxTransactionSize {
+		writeQuota, overQuotaErr := h.MaxFilesize, errFileTooLarge
+		if h.MaxTransactionSize > 0 {
+			if bytesWrittenInTransaction >= h.MaxTransactionSize {
 				return http.StatusRequestEntityTooLarge, errTransactionTooLarge
 			}
-			if writeQuota == 0 || (config.MaxTransactionSize-bytesWrittenInTransaction) < writeQuota {
-				writeQuota, overQuotaErr = config.MaxTransactionSize-bytesWrittenInTransaction, errTransactionTooLarge
+			if writeQuota == 0 || (h.MaxTransactionSize-bytesWrittenInTransaction) < writeQuota {
+				writeQuota, overQuotaErr = h.MaxTransactionSize-bytesWrittenInTransaction, errTransactionTooLarge
 			}
 		}
 
@@ -168,7 +176,7 @@ func (h *Handler) serveMultipartUpload(w http.ResponseWriter, r *http.Request,
 			}
 		}
 
-		bytesWritten, locationOnDisk, retval, err := h.writeOneHTTPBlob(scope, config, fileName, expectBytes, writeQuota, part)
+		bytesWritten, locationOnDisk, retval, err := h.writeOneHTTPBlob(fileName, expectBytes, writeQuota, part)
 		bytesWrittenInTransaction += bytesWritten
 		if writeQuota > 0 && bytesWritten > writeQuota {
 			return http.StatusRequestEntityTooLarge, overQuotaErr
@@ -178,8 +186,8 @@ func (h *Handler) serveMultipartUpload(w http.ResponseWriter, r *http.Request,
 			return retval, errors.Wrap(err, "MIME Multipart exploding failed on part "+strconv.Itoa(partNum))
 		}
 
-		if config.ApparentLocation != "" {
-			newApparentLocation := strings.Replace(locationOnDisk, config.WriteToPath, config.ApparentLocation, 1)
+		if h.ApparentLocation != "" {
+			newApparentLocation := strings.Replace(locationOnDisk, h.WriteToPath, h.ApparentLocation, 1)
 			if strings.HasPrefix(newApparentLocation, "//") {
 				w.Header().Add("Location", newApparentLocation[1:])
 			} else {
@@ -193,23 +201,23 @@ func (h *Handler) serveMultipartUpload(w http.ResponseWriter, r *http.Request,
 }
 
 // Translates the 'scope' into a proper directory, and extracts the filename from the resulting string.
-func (h *Handler) translateForFilesystem(scope, providedName string, config *ScopeConfiguration) (fsPath, fsFilename string, err error) {
+func (h *Handler) translateForFilesystem(providedName string) (fsPath, fsFilename string, err error) {
 	// 'uc' is freely controlled by the uploader
-	uc := strings.TrimPrefix(providedName, scope) // "/upload/mine/my.blob" → "/mine/my.blob"
-	s := filepath.Join(config.WriteToPath, uc)    // → "/var/mine/my.blob"
+	uc := strings.TrimPrefix(providedName, h.Scope) // "/upload/mine/my.blob" → "/mine/my.blob"
+	s := filepath.Join(h.WriteToPath, uc)           // → "/var/mine/my.blob"
 
 	// stop any childish path trickery here
 	translated := filepath.Clean(s) // "/var/mine/../mine/my.blob" → "/var/mine/my.blob"
-	if !strings.HasPrefix(translated, config.WriteToPath) {
+	if !strings.HasPrefix(translated, h.WriteToPath) {
 		err = os.ErrPermission
 		return
 	}
 
 	var enforceForm *norm.Form
-	if config.UnicodeForm != nil {
-		enforceForm = &config.UnicodeForm.Use
+	if h.UnicodeForm != nil {
+		enforceForm = &h.UnicodeForm.Use
 	}
-	if !IsAcceptableFilename(uc, config.RestrictFilenamesTo, enforceForm) {
+	if !IsAcceptableFilename(uc, h.RestrictFilenamesTo, enforceForm) {
 		err = errInvalidFileName
 		return
 	}
@@ -222,14 +230,13 @@ func (h *Handler) translateForFilesystem(scope, providedName string, config *Sco
 // moveOneFile corresponds to HTTP method MOVE, and renames a file or path.
 //
 // The destination filename is parsed as if it were an URL.Path.
-func (h *Handler) moveOneFile(scope string, config *ScopeConfiguration,
-	fromFilename, toFilename string) (int, error) {
-	frompath, fromname, err := h.translateForFilesystem(scope, fromFilename, config)
+func (h *Handler) moveOneFile(fromFilename, toFilename string) (int, error) {
+	frompath, fromname, err := h.translateForFilesystem(fromFilename)
 	if err != nil {
 		return http.StatusUnprocessableEntity, errors.Wrap(err, "Invalid source filepath")
 	}
 	moveFrom := filepath.Join(frompath, fromname)
-	topath, toname, err := h.translateForFilesystem(scope, toFilename, config)
+	topath, toname, err := h.translateForFilesystem(toFilename)
 	if err != nil {
 		return http.StatusUnprocessableEntity, errors.Wrap(err, "Invalid destination filepath")
 	}
@@ -240,7 +247,7 @@ func (h *Handler) moveOneFile(scope string, config *ScopeConfiguration,
 	if moveFrom == moveTo {
 		return http.StatusConflict, nil
 	}
-	if moveFrom == config.WriteToPath || moveTo == config.WriteToPath {
+	if moveFrom == h.WriteToPath || moveTo == h.WriteToPath {
 		return http.StatusForbidden, nil // refuse any tinkering with the scope's target directory
 	}
 
@@ -258,8 +265,8 @@ func (h *Handler) moveOneFile(scope string, config *ScopeConfiguration,
 // The term 'file' includes directories.
 //
 // Returns 204 (StatusNoContent) if the file did not exist ex ante.
-func (h *Handler) deleteOneFile(scope string, config *ScopeConfiguration, fileName string) (int, error) {
-	path, fname, err := h.translateForFilesystem(scope, fileName, config)
+func (h *Handler) deleteOneFile(fileName string) (int, error) {
+	path, fname, err := h.translateForFilesystem(fileName)
 	if err != nil {
 		return http.StatusUnprocessableEntity, err // 422: unprocessable entity
 	}
@@ -267,7 +274,7 @@ func (h *Handler) deleteOneFile(scope string, config *ScopeConfiguration, fileNa
 
 	// no "os.Stat(); os.IsExist()" here: we don't check for 412 (Precondition Failed)
 
-	if deleteThis == config.WriteToPath {
+	if deleteThis == h.WriteToPath {
 		return http.StatusForbidden, nil // refuse to delete the scope's target directory
 	}
 
@@ -285,20 +292,20 @@ func (h *Handler) deleteOneFile(scope string, config *ScopeConfiguration, fileNa
 // writes one file to disk by adapting writeFileFromReader to HTTP conventions.
 //
 // Returns |bytesWritten|, |locationOnDisk|, |suggestHTTPResponseCode|, error.
-func (h *Handler) writeOneHTTPBlob(scope string, config *ScopeConfiguration, fileName string,
+func (h *Handler) writeOneHTTPBlob(fileName string,
 	expectBytes, writeQuota int64, r io.Reader) (int64, string, int, error) {
-	path, fname, err := h.translateForFilesystem(scope, fileName, config)
+	path, fname, err := h.translateForFilesystem(fileName)
 	if err != nil {
 		return 0, "", http.StatusUnprocessableEntity, err // 422: unprocessable entity
 	}
 
-	if config.RandomizedSuffixLength > 0 {
+	if h.RandomizedSuffixLength > 0 {
 		extension := filepath.Ext(fname)
 		basename := strings.TrimSuffix(fname, extension)
 		if basename == "" {
-			fname = printableSuffix(config.RandomizedSuffixLength) + extension
+			fname = printableSuffix(h.RandomizedSuffixLength) + extension
 		} else {
-			fname = basename + "_" + printableSuffix(config.RandomizedSuffixLength) + extension
+			fname = basename + "_" + printableSuffix(h.RandomizedSuffixLength) + extension
 		}
 	}
 

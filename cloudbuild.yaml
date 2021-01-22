@@ -103,7 +103,7 @@ steps:
       -o /workspace/http.upload~$${GOARCH}_$${GOOS} \
       example.go;
     sed -i \
-      -e '/cfg\./a\\tcfg.RandomizedSuffixLength = 4' \
+      -e '/uploadHandler\./a\\tuploadHandler.RandomizedSuffixLength = 4' \
       example.go;
     go build \
       -ldflags  "-s -w -buildid ''" \

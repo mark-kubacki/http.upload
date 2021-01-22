@@ -14,9 +14,7 @@ func Example() {
 		next      = http.FileServer(http.Dir(directory))
 	)
 
-	cfg := NewDefaultConfiguration(directory)
-	uploadHandler, _ := NewHandler(scope, cfg, next)
-
+	uploadHandler, _ := NewHandler(scope, directory, next)
 	http.Handle(scope, uploadHandler)
 	// http.ListenAndServe(":9000", nil)
 }

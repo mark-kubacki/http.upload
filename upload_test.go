@@ -52,37 +52,32 @@ func init() {
 
 	t := http.NewServeMux()
 	{
-		c1 := NewDefaultConfiguration(scratchDir)
-		c1.EnableWebdav = true
-		c1.ApparentLocation = "/newdir"
-		h1, _ := NewHandler("/subdir", c1, next)
+		h1, _ := NewHandler("/subdir", scratchDir, next)
+		h1.EnableWebdav = true
+		h1.ApparentLocation = "/newdir"
 		t.Handle("/subdir/", h1)
 
-		c2 := NewDefaultConfiguration(scratchDir)
-		c2.EnableWebdav = true
-		h2, _ := NewHandler("/", c2, next)
+		h2, _ := NewHandler("/", scratchDir, next)
+		h2.EnableWebdav = true
 		t.Handle("/", h2)
 	}
 	trivialConfig = t
 
 	u := http.NewServeMux()
 	{
-		c1 := NewDefaultConfiguration(scratchDir)
-		c1.MaxFilesize = 64000
-		c1.MaxTransactionSize = 0
-		h1, _ := NewHandler("/filesize", c1, next)
+		h1, _ := NewHandler("/filesize", scratchDir, next)
+		h1.MaxFilesize = 64000
+		h1.MaxTransactionSize = 0
 		u.Handle("/filesize/", h1)
 
-		c2 := NewDefaultConfiguration(scratchDir)
-		c2.MaxFilesize = 0
-		c2.MaxTransactionSize = 64000
-		h2, _ := NewHandler("/transaction", c2, next)
+		h2, _ := NewHandler("/transaction", scratchDir, next)
+		h2.MaxFilesize = 0
+		h2.MaxTransactionSize = 64000
 		u.Handle("/transaction/", h2)
 
-		c3 := NewDefaultConfiguration(scratchDir)
-		c3.MaxFilesize = 64000
-		c3.MaxTransactionSize = 128000
-		h3, _ := NewHandler("/both/", c3, next)
+		h3, _ := NewHandler("/both/", scratchDir, next)
+		h3.MaxFilesize = 64000
+		h3.MaxTransactionSize = 128000
 		u.Handle("/both/", h3)
 	}
 	sizeLimited = u
@@ -206,9 +201,7 @@ func TestUpload_ServeHTTP(t *testing.T) {
 		Convey("strips the prefix correctly", func() {
 			scopeName := tempFileName()
 			pathName, fileName := tempFileName(), tempFileName()
-
-			cfg := NewDefaultConfiguration(scratchDir)
-			h, _ := NewHandler("/"+scopeName+"/", cfg, next)
+			h, _ := NewHandler("/"+scopeName+"/", scratchDir, next)
 
 			req, err := http.NewRequest("PUT", "/"+scopeName+"/"+pathName+"/"+fileName, strings.NewReader("DELME"))
 			if err != nil {
@@ -255,7 +248,7 @@ func TestUpload_ServeHTTP(t *testing.T) {
 
 		Convey("gets aborted for files below the writable path", func() {
 			// Bypass http.ServeMux becuase it interferes with path parsing.
-			h, _ := NewHandler("/", NewDefaultConfiguration(scratchDir), next)
+			h, _ := NewHandler("/", scratchDir, next)
 
 			tempFName := tempFileName()
 			req, err := http.NewRequest("PUT", "/nop/../../../tmp/../"+tempFName, strings.NewReader("DELME"))
@@ -272,7 +265,8 @@ func TestUpload_ServeHTTP(t *testing.T) {
 		})
 
 		Convey("rejects paths that contain unexpected alphabets", func() {
-			cfg := NewDefaultConfiguration(scratchDir)
+			// Bypass http.ServeMux because it interferes with path parsing.
+			h, _ := NewHandler("/", scratchDir, next)
 			azOnly := unicode.RangeTable{
 				R16: []unicode.Range16{
 					{0x002f, 0x002f, 1}, // A lone '/' to enable sub-dirs.
@@ -280,9 +274,7 @@ func TestUpload_ServeHTTP(t *testing.T) {
 				},
 				LatinOffset: 1,
 			}
-			cfg.RestrictFilenamesTo = []*unicode.RangeTable{&azOnly}
-			// Bypass http.ServeMux becuase it interferes with path parsing.
-			h, _ := NewHandler("/", cfg, next)
+			h.RestrictFilenamesTo = []*unicode.RangeTable{&azOnly}
 
 			tempFName := tempFileName() // The name is in a-z by design.
 			// Feed it a '0' which is outside the given ranges, i. e. unexpected,
@@ -448,10 +440,9 @@ func TestUpload_ServeHTTP(t *testing.T) {
 	})
 
 	Convey("A random suffix", t, func() {
-		cfg := NewDefaultConfiguration(scratchDir)
-		cfg.ApparentLocation = "/"
-		cfg.RandomizedSuffixLength = 3
-		h, _ := NewHandler("/", cfg, next)
+		h, _ := NewHandler("/", scratchDir, next)
+		h.ApparentLocation = "/"
+		h.RandomizedSuffixLength = 3
 
 		Convey("can be used in a full filename as in NAME_XXX.EXT", func() {
 			tempFName := tempFileName()
@@ -523,7 +514,7 @@ func TestUpload_ServeHTTP(t *testing.T) {
 	})
 
 	Convey("Handling of conflicts includes", t, func() {
-		h, _ := NewHandler("/", NewDefaultConfiguration(scratchDir), next)
+		h, _ := NewHandler("/", scratchDir, next)
 
 		Convey("name clashes between directories and new filename", func() {
 			tempFName := tempFileName()
@@ -700,9 +691,8 @@ func TestUpload_ServeHTTP(t *testing.T) {
 		})
 
 		Convey("DELETE will not remove the target directory", func() {
-			cfg := NewDefaultConfiguration(scratchDir)
-			cfg.EnableWebdav = true
-			h, _ := NewHandler("/subdir", cfg, next)
+			h, _ := NewHandler("/subdir", scratchDir, next)
+			h.EnableWebdav = true
 			req, _ := http.NewRequest("DELETE", "/subdir", nil)
 
 			w := httptest.NewRecorder()
