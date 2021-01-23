@@ -18,10 +18,9 @@ import (
 )
 
 const (
-	// AlwaysRejectRunes contains runes that are not safe to use with network shares.
-	//
-	// Please note that '/' is already discarded at an earlier stage.
-	AlwaysRejectRunes = `"*:<>?|\`
+	// AlwaysRejectedRunes contains which that are not safe to use with network shares.
+	// If a file name contains any, it will be rejected.
+	AlwaysRejectedRunes = `"*:<>?|\`
 
 	runeSpatium = '\u2009'
 
@@ -36,8 +35,7 @@ type unicodeBlocklistParsingError string
 // Error implements the error interface.
 func (e unicodeBlocklistParsingError) Error() string { return string(e) }
 
-// Not all runes in unicode.PrintRanges are suitable for filenames.
-// They are collected here.
+// Collection of runes from unicode.PrintRanges not suitable for filenames.
 var excludedRunes = &unicode.RangeTable{
 	R16: []unicode.Range16{
 		{0x2028, 0x202f, 1}, // new line, paragraph etc.
@@ -46,31 +44,27 @@ var excludedRunes = &unicode.RangeTable{
 	LatinOffset: 0,
 }
 
-// IsAcceptableFilename is used to enforce filenames in wanted alphabet(s).
-// Setting 'reduceAcceptableRunesTo' reduces the supremum unicode.PrintRanges.
+// InAlphabet is true for strings exclusively in the given alphabet and form.
 //
-// A string with runes – other than U+0020 (space) or U+2009 (spatium) –
-// representing space will be rejected.
+// Runes representing whitespace – other than U+0020 (space) and U+2009 (spatium) –
+// as well as any non-printable will always be rejected.
 //
-// Filenames are not transliterated to prevent loops within clusters of mirrors.
-func IsAcceptableFilename(s string, reduceAcceptableRunesTo []*unicode.RangeTable,
-	enforceForm *norm.Form) bool {
-	// most of the Internet is in NFC
-	// (though that even changes within pages, for example for Japanese names)
+// Use this to filter file names.
+func InAlphabet(s string, alphabet []*unicode.RangeTable, enforceForm *norm.Form) bool {
 	if enforceForm != nil && !enforceForm.IsNormalString(s) {
 		return false
 	}
 
-	if reduceAcceptableRunesTo != nil {
+	if alphabet != nil {
 		for _, r := range s {
-			if !unicode.In(r, reduceAcceptableRunesTo...) {
+			if !unicode.In(r, alphabet...) {
 				return false
 			}
 		}
 	}
 
 	for _, r := range s {
-		if uint32(r) <= unicode.MaxLatin1 && strings.ContainsRune(AlwaysRejectRunes, r) {
+		if uint32(r) <= unicode.MaxLatin1 && strings.ContainsRune(AlwaysRejectedRunes, r) {
 			return false
 		}
 		if r == runeSpatium {
@@ -101,10 +95,11 @@ func (a tupleForRangeSlice) Less(i, j int) bool {
 	return false
 }
 
-// ParseUnicodeBlockList naïvely translates a string with space-delimited Unicode ranges to Go's unicode.RangeTable.
+// ParseUnicodeBlockList naïvely translates a string with space-delimited
+// Unicode ranges to Go's unicode.RangeTable.
 //
 // All elements must fit into uint32.
-// A Range must begin with its lower bound, and ranges must not overlap (we don't check this here!).
+// A Range must begin with its lower bound, and ranges must not overlap.
 //
 // The format of one range is as follows, with 'stride' being set to '1' if left empty.
 //  <low>-<high>[:<stride>]
@@ -195,7 +190,8 @@ func ParseUnicodeBlockList(str string) (*unicode.RangeTable, error) {
 	return &rt, nil
 }
 
-// printableSuffix returns printable chars meant to be used as randomized suffix in filenames.
+// printableSuffix returns printable chars meant to be used as randomized suffix
+// in file names.
 func printableSuffix(wantedLength uint32) string {
 	suffix := make([]byte, wantedLength, wantedLength)
 	rand.Read(suffix)

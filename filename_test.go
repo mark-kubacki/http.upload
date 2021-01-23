@@ -12,8 +12,8 @@ import (
 	. "github.com/smartystreets/goconvey/convey"
 )
 
-func TestIsAcceptableFilename(t *testing.T) {
-	Convey("IsAcceptableFilename", t, FailureContinues, func() {
+func TestInAlphabet(t *testing.T) {
+	Convey("InAlphabet", t, FailureContinues, func() {
 		Convey("handles Latin-1 input correctly", FailureContinues, func() {
 			samples := []struct {
 				input    string
@@ -34,7 +34,7 @@ func TestIsAcceptableFilename(t *testing.T) {
 			}
 
 			for i, tuple := range samples {
-				tuple.returned = IsAcceptableFilename(samples[i].input, nil, nil)
+				tuple.returned = InAlphabet(samples[i].input, nil, nil)
 				So(tuple, ShouldResemble, samples[i])
 			}
 		})
@@ -44,7 +44,7 @@ func TestIsAcceptableFilename(t *testing.T) {
 				input    string
 				returned bool
 			}{
-				{"W. Mark Kubacki", true}, {"J. Edgar", true},
+				{"J. Edgar", true},
 				{"keyboard → „typewriters’ keylayout“ ≠ »DIN T2 you ought better buy«", true},
 				{"Döner macht schöner.", true},
 				{"GENUẞMITTEL Kauﬂäche häuﬁg ǲerba", true}, // ligatures (capital ß after 1900 for historic documents)
@@ -52,7 +52,7 @@ func TestIsAcceptableFilename(t *testing.T) {
 			}
 
 			for i, tuple := range samples {
-				tuple.returned = IsAcceptableFilename(samples[i].input, nil, nil)
+				tuple.returned = InAlphabet(samples[i].input, nil, nil)
 				So(tuple, ShouldResemble, samples[i])
 			}
 		})
@@ -68,12 +68,12 @@ func TestIsAcceptableFilename(t *testing.T) {
 			}
 
 			for i, tuple := range samples {
-				tuple.returned = IsAcceptableFilename(samples[i].input, nil, nil)
+				tuple.returned = InAlphabet(samples[i].input, nil, nil)
 				So(tuple, ShouldResemble, samples[i])
 			}
 		})
 
-		Convey("allows to restrict the acceptable rune ranges", FailureContinues, func() {
+		Convey("allows to restrict acceptable rune ranges", FailureContinues, func() {
 			azOnly := unicode.RangeTable{
 				R16: []unicode.Range16{
 					{0x0061, 0x007a, 1}, // a-z
@@ -91,7 +91,7 @@ func TestIsAcceptableFilename(t *testing.T) {
 			}
 
 			for i, tuple := range samples {
-				tuple.returned = IsAcceptableFilename(samples[i].input, samples[i].restrict, nil)
+				tuple.returned = InAlphabet(samples[i].input, samples[i].restrict, nil)
 				So(tuple, ShouldResemble, samples[i])
 			}
 		})
@@ -107,7 +107,7 @@ func TestIsAcceptableFilename(t *testing.T) {
 			}
 
 			for i, tuple := range samples {
-				tuple.returned = IsAcceptableFilename(samples[i].input, nil, &samples[i].form)
+				tuple.returned = InAlphabet(samples[i].input, nil, &samples[i].form)
 				So(tuple, ShouldResemble, samples[i])
 			}
 		})

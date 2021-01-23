@@ -217,7 +217,7 @@ func (h *Handler) translateForFilesystem(providedName string) (fsPath, fsFilenam
 	if h.UnicodeForm != nil {
 		enforceForm = &h.UnicodeForm.Use
 	}
-	if !IsAcceptableFilename(uc, h.RestrictFilenamesTo, enforceForm) {
+	if !InAlphabet(uc, h.RestrictFilenamesTo, enforceForm) {
 		err = errInvalidFileName
 		return
 	}
