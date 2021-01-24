@@ -4,10 +4,13 @@
 package upload
 
 import (
+	"context"
 	"net/http"
 	"path/filepath"
 	"unicode"
 
+	"gocloud.dev/blob"
+	_ "gocloud.dev/blob/fileblob" // Registers scheme "file://"
 	"golang.org/x/text/unicode/norm"
 )
 
@@ -17,8 +20,8 @@ type Handler struct {
 	MaxFilesize        int64
 	MaxTransactionSize int64
 
-	// Target directory on disk that serves as upload destination.
-	WriteToPath string
+	// The upload destination.
+	Bucket *blob.Bucket
 
 	// Uploaded files can be gotten back from here.
 	// If ≠ "" this will trigger sending headers such as "Location".
@@ -49,17 +52,19 @@ type Handler struct {
 //
 // 'next' is optional and can be nil.
 func NewHandler(scope string, targetDirectory string, next http.Handler) (*Handler, error) {
-	if targetDirectory != "" { // Primarily to strip any trailing slash (separator).
-		targetDirectory = filepath.Clean(targetDirectory)
+	targetDirectory = filepath.Clean(targetDirectory) // Gets rid of any trailing slash.
+	bucket, err := blob.OpenBucket(
+		context.Background(),
+		"file://"+targetDirectory,
+	)
+	if err != nil {
+		return nil, err
 	}
-	// Don't check whether targetDirectory actually exists.
-	// Years ago this has been part of a http server daemon whose author
-	// insists on “lazy checks.”
 
 	h := Handler{
-		WriteToPath: targetDirectory,
-		Next:        next,
-		Scope:       scope,
+		Bucket: bucket,
+		Next:   next,
+		Scope:  scope,
 	}
 	return &h, nil
 }

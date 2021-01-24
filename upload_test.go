@@ -225,27 +225,6 @@ func TestUpload_ServeHTTP(t *testing.T) {
 			So(os.IsNotExist(err), ShouldBeTrue)
 		})
 
-		Convey("succeeds with a size announced too large", func() {
-			tempFName := tempFileName()
-			req, err := http.NewRequest("PUT", "/"+tempFName, strings.NewReader("DELME"))
-			if err != nil {
-				t.Fatal(err)
-			}
-			req.Header.Set("Content-Length", "20")
-			defer func() {
-				os.Remove(filepath.Join(scratchDir, tempFName))
-			}()
-
-			w := httptest.NewRecorder()
-			h.ServeHTTP(w, req)
-			resp := w.Result()
-			ioutil.ReadAll(resp.Body)
-
-			So(resp.StatusCode, ShouldEqual, 202)
-
-			compareContents(filepath.Join(scratchDir, tempFName), []byte("DELME"))
-		})
-
 		Convey("gets aborted for files below the writable path", func() {
 			// Bypass http.ServeMux becuase it interferes with path parsing.
 			h, _ := NewHandler("/", scratchDir, next)
@@ -593,7 +572,7 @@ func TestUpload_ServeHTTP(t *testing.T) {
 	Convey("COPY, MOVE, and DELETE are supported", t, func() {
 		h := trivialConfig
 
-		SkipConvey("COPY duplicates a file", func() {
+		Convey("COPY duplicates a file", func() {
 			tempFName, copyFName := tempFileName(), tempFileName()
 			req, _ := http.NewRequest("PUT", "/"+tempFName, strings.NewReader("DELME"))
 			defer func() {
@@ -605,12 +584,8 @@ func TestUpload_ServeHTTP(t *testing.T) {
 			h.ServeHTTP(w, req)
 			resp := w.Result()
 			ioutil.ReadAll(resp.Body)
-			if resp.StatusCode != 200 {
-				So(resp.StatusCode, ShouldEqual, 200)
-				return
-			}
+			So(resp.StatusCode, ShouldEqual, 201)
 
-			// COPY
 			req, _ = http.NewRequest("COPY", "/"+tempFName, nil)
 			req.Header.Set("Destination", "/"+copyFName)
 			defer func() {
@@ -730,19 +705,12 @@ func TestUpload_ServeHTTP(t *testing.T) {
 					So(resp.StatusCode, ShouldEqual, 413) // too large, as indicated by the header
 
 					req.Header.Set("Content-Length", "64000")
-					w = httptest.NewRecorder()
-					h.ServeHTTP(w, req)
-					resp = w.Result()
-					ioutil.ReadAll(resp.Body)
-					So(resp.StatusCode, ShouldBeIn, 201, 202) // at the limit
-
-					// now change the actual file contents
 					req.Body = ioutil.NopCloser(strings.NewReader(strings.Repeat("\xcc", 64000)))
 					w = httptest.NewRecorder()
 					h.ServeHTTP(w, req)
 					resp = w.Result()
 					ioutil.ReadAll(resp.Body)
-					So(resp.StatusCode, ShouldBeIn, 201, 202)
+					So(resp.StatusCode, ShouldBeIn, 201, 202) // at the limit
 
 					req.Header.Del("Content-Length")
 					req.Body = ioutil.NopCloser(strings.NewReader(strings.Repeat("\x33", 64001)))

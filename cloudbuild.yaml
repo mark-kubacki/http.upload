@@ -146,8 +146,6 @@ steps:
     curl -sfS -vX DELETE http://localhost:8000/web/path/to-release;
 
     curl -sfS -T /etc/os-release http://localhost:8000/web/path/subdir/os-release && test -s $${TMPDIR}/subdir/os-release;
-    rm -f $${TMPDIR}/subdir/os-release;
-    rmdir $${TMPDIR}/subdir;
 
     kill %1
 

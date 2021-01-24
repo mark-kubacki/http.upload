@@ -4,16 +4,14 @@
 package upload
 
 import (
+	"context"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 
-	"blitznote.com/src/protofile/v2"
 	"github.com/pkg/errors"
 	"golang.org/x/text/unicode/norm"
 )
@@ -68,18 +66,22 @@ func (h *Handler) serveHTTP(w http.ResponseWriter, r *http.Request) (int, error)
 
 	switch r.Method {
 	case "COPY":
-		return http.StatusNotImplemented, nil
+		destName := r.Header.Get("Destination")
+		if len(r.URL.Path) < 2 || destName == "" {
+			return http.StatusBadRequest, errNoDestination
+		}
+		return h.copy(r.Context(), destName, r.URL.Path, false)
 	case "MOVE":
 		destName := r.Header.Get("Destination")
 		if len(r.URL.Path) < 2 || destName == "" {
 			return http.StatusBadRequest, errNoDestination
 		}
-		return h.moveOneFile(r.URL.Path, destName)
+		return h.copy(r.Context(), destName, r.URL.Path, true)
 	case "DELETE":
 		if len(r.URL.Path) < 2 {
 			return http.StatusBadRequest, errNoDestination
 		}
-		return h.deleteOneFile(r.URL.Path)
+		return h.deleteOneFile(r.Context(), r.URL.Path)
 	case http.MethodPost:
 		ctype := r.Header.Get("Content-Type")
 		switch {
@@ -90,45 +92,50 @@ func (h *Handler) serveHTTP(w http.ResponseWriter, r *http.Request) (int, error)
 		}
 		fallthrough
 	case http.MethodPut:
-		if len(r.URL.Path) < 2 {
-			return http.StatusBadRequest, errNoDestination
-		}
-
-		writeQuota, overQuotaErr := h.MaxTransactionSize, errTransactionTooLarge
-		if writeQuota == 0 || (h.MaxFilesize > 0 && h.MaxFilesize < writeQuota) {
-			writeQuota, overQuotaErr = h.MaxFilesize, errFileTooLarge
-		}
-
-		var expectBytes int64
-		if r.Header.Get("Content-Length") != "" { // unfortunately, sending this header is optional
-			var perr error
-			expectBytes, perr = strconv.ParseInt(r.Header.Get("Content-Length"), 10, 64)
-			if perr != nil || expectBytes < 0 {
-				return http.StatusBadRequest, errLengthInvalid
-			}
-			if writeQuota > 0 && expectBytes > writeQuota { // XXX(mark): skip this check if sparse files are allowed
-				return http.StatusRequestEntityTooLarge, overQuotaErr // http.PayloadTooLarge
-			}
-		}
-
-		bytesWritten, locationOnDisk, retval, err := h.writeOneHTTPBlob(r.URL.Path, expectBytes, writeQuota, r.Body)
-		if writeQuota > 0 && bytesWritten > writeQuota {
-			// The partially uploaded file gets discarded by writeOneHTTPBlob.
-			return http.StatusRequestEntityTooLarge, overQuotaErr
-		}
-
-		if err == nil && h.ApparentLocation != "" {
-			newApparentLocation := strings.Replace(locationOnDisk, h.WriteToPath, h.ApparentLocation, 1)
-			if strings.HasPrefix(newApparentLocation, "//") {
-				w.Header().Set("Location", newApparentLocation[1:])
-			} else {
-				w.Header().Set("Location", newApparentLocation)
-			}
-		}
-		return retval, err
+		return h.serveOneUpload(w, r)
 	default:
 		return http.StatusMethodNotAllowed, nil
 	}
+}
+
+// serveOneUpload usually is used with HTTP PUT, and writes one file.
+func (h *Handler) serveOneUpload(w http.ResponseWriter, r *http.Request) (int, error) {
+	if len(r.URL.Path) < 2 {
+		return http.StatusBadRequest, errNoDestination
+	}
+
+	// Select the limiter, transaction- or file size.
+	writeQuota, overQuotaErr := h.MaxTransactionSize, errTransactionTooLarge
+	if writeQuota == 0 || (h.MaxFilesize > 0 && h.MaxFilesize < writeQuota) {
+		writeQuota, overQuotaErr = h.MaxFilesize, errFileTooLarge
+	}
+
+	var expectBytes int64
+	if r.Header.Get("Content-Length") != "" { // An optional header.
+		var perr error
+		expectBytes, perr = strconv.ParseInt(r.Header.Get("Content-Length"), 10, 64)
+		if perr != nil || expectBytes < 0 {
+			return http.StatusBadRequest, errLengthInvalid
+		}
+		if writeQuota > 0 && expectBytes > writeQuota {
+			return http.StatusRequestEntityTooLarge, overQuotaErr // http.PayloadTooLarge
+		}
+	}
+
+	bytesWritten, key, retval, err := h.writeOneHTTPBlob(r.Context(), r.URL.Path, expectBytes, writeQuota, r.Body)
+	if writeQuota > 0 && bytesWritten > writeQuota {
+		// The partially uploaded file gets discarded by writeOneHTTPBlob.
+		return http.StatusRequestEntityTooLarge, overQuotaErr
+	}
+
+	if err == nil && h.ApparentLocation != "" {
+		newApparentLocation := "/" + key
+		if h.ApparentLocation != "/" {
+			newApparentLocation = h.ApparentLocation + newApparentLocation
+		}
+		w.Header().Add("Location", newApparentLocation)
+	}
+	return retval, err
 }
 
 // serveMultipartUpload is used on HTTP POST to explode a MIME Multipart envelope
@@ -154,6 +161,12 @@ func (h *Handler) serveMultipartUpload(w http.ResponseWriter, r *http.Request) (
 		if fileName == "" {
 			continue
 		}
+		// Part names are relative, and need the target directory still.
+		if h.Scope == "/" {
+			fileName = h.Scope + fileName
+		} else {
+			fileName = h.Scope + "/" + fileName
+		}
 
 		writeQuota, overQuotaErr := h.MaxFilesize, errFileTooLarge
 		if h.MaxTransactionSize > 0 {
@@ -171,12 +184,12 @@ func (h *Handler) serveMultipartUpload(w http.ResponseWriter, r *http.Request) (
 			if err != nil || expectBytes < 0 {
 				return http.StatusBadRequest, errLengthInvalid
 			}
-			if writeQuota > 0 && expectBytes > writeQuota { // XXX(mark): sparse files would need this
+			if writeQuota > 0 && expectBytes > writeQuota {
 				return http.StatusRequestEntityTooLarge, overQuotaErr
 			}
 		}
 
-		bytesWritten, locationOnDisk, retval, err := h.writeOneHTTPBlob(fileName, expectBytes, writeQuota, part)
+		bytesWritten, key, retval, err := h.writeOneHTTPBlob(r.Context(), fileName, expectBytes, writeQuota, part)
 		bytesWrittenInTransaction += bytesWritten
 		if writeQuota > 0 && bytesWritten > writeQuota {
 			return http.StatusRequestEntityTooLarge, overQuotaErr
@@ -187,12 +200,11 @@ func (h *Handler) serveMultipartUpload(w http.ResponseWriter, r *http.Request) (
 		}
 
 		if h.ApparentLocation != "" {
-			newApparentLocation := strings.Replace(locationOnDisk, h.WriteToPath, h.ApparentLocation, 1)
-			if strings.HasPrefix(newApparentLocation, "//") {
-				w.Header().Add("Location", newApparentLocation[1:])
-			} else {
-				w.Header().Add("Location", newApparentLocation)
+			newApparentLocation := "/" + key
+			if h.ApparentLocation != "/" {
+				newApparentLocation = h.ApparentLocation + newApparentLocation
 			}
+			w.Header().Add("Location", newApparentLocation)
 			// Yes, we send this even though the next part might throw an error.
 		}
 	}
@@ -200,85 +212,103 @@ func (h *Handler) serveMultipartUpload(w http.ResponseWriter, r *http.Request) (
 	return http.StatusCreated, nil
 }
 
-// Translates the 'scope' into a proper directory, and extracts the filename from the resulting string.
-func (h *Handler) translateForFilesystem(providedName string) (fsPath, fsFilename string, err error) {
-	// 'uc' is freely controlled by the uploader
-	uc := strings.TrimPrefix(providedName, h.Scope) // "/upload/mine/my.blob" → "/mine/my.blob"
-	s := filepath.Join(h.WriteToPath, uc)           // → "/var/mine/my.blob"
-
-	// stop any childish path trickery here
-	translated := filepath.Clean(s) // "/var/mine/../mine/my.blob" → "/var/mine/my.blob"
-	if !strings.HasPrefix(translated, h.WriteToPath) {
+// translateToKey derives a key suitable for use with Storage Buckets.
+func (h *Handler) translateToKey(path string) (key string, err error) {
+	if path == h.Scope {
+		return "", os.ErrPermission
+	}
+	canary := "/" + printableSuffix(15)
+	key = filepath.Clean(canary + path) // "/var/mine/../mine/my.blob" → "/var/mine/my.blob"
+	if !strings.HasPrefix(key, canary+h.Scope) {
 		err = os.ErrPermission
 		return
+	}
+	if h.Scope == "/" {
+		key = key[len(canary)+1:]
+	} else {
+		key = key[len(canary)+len(h.Scope)+1:] // "/upload/mine/my.blob" → "/mine/my.blob"
 	}
 
 	var enforceForm *norm.Form
 	if h.UnicodeForm != nil {
 		enforceForm = &h.UnicodeForm.Use
 	}
-	if !InAlphabet(uc, h.RestrictFilenamesTo, enforceForm) {
+	if !InAlphabet(key, h.RestrictFilenamesTo, enforceForm) {
 		err = errInvalidFileName
-		return
 	}
-
-	fsPath, fsFilename = filepath.Dir(translated), filepath.Base(translated)
-
 	return
 }
 
-// moveOneFile corresponds to HTTP method MOVE, and renames a file or path.
+func (h *Handler) applyRandomizedSuffix(key string) string {
+	if h.RandomizedSuffixLength <= 0 {
+		return key
+	}
+	extension := filepath.Ext(key)
+	basename := strings.TrimSuffix(key, extension)
+	if basename == "" || strings.HasSuffix(basename, "/") {
+		key = basename + printableSuffix(h.RandomizedSuffixLength) + extension
+	} else {
+		key = basename + "_" + printableSuffix(h.RandomizedSuffixLength) + extension
+	}
+	return key
+}
+
+// copy is meant to respond to HTTP COPY by duplicating a file,
+// and MOVE if deleteSource is true.
 //
 // The destination filename is parsed as if it were an URL.Path.
-func (h *Handler) moveOneFile(fromFilename, toFilename string) (int, error) {
-	frompath, fromname, err := h.translateForFilesystem(fromFilename)
+func (h *Handler) copy(ctx context.Context, newPath, oldPath string, deleteSource bool) (int, error) {
+	srcKey, err := h.translateToKey(oldPath)
 	if err != nil {
 		return http.StatusUnprocessableEntity, errors.Wrap(err, "Invalid source filepath")
 	}
-	moveFrom := filepath.Join(frompath, fromname)
-	topath, toname, err := h.translateForFilesystem(toFilename)
+	dstKey, err := h.translateToKey(newPath)
 	if err != nil {
 		return http.StatusUnprocessableEntity, errors.Wrap(err, "Invalid destination filepath")
 	}
-	moveTo := filepath.Join(topath, toname)
 
 	// Do not check for Unicode equivalence here:
 	// The requestor might want to change forms!
-	if moveFrom == moveTo {
-		return http.StatusConflict, nil
-	}
-	if moveFrom == h.WriteToPath || moveTo == h.WriteToPath {
-		return http.StatusForbidden, nil // refuse any tinkering with the scope's target directory
+	if srcKey == dstKey {
+		return http.StatusForbidden, nil
 	}
 
-	err = os.Rename(moveFrom, moveTo)
-	if err == nil {
+	if err := h.Bucket.Copy(ctx, dstKey, srcKey, nil); err != nil {
+		// Because gcerr is an internal package.
+		gcerr, _ := err.(interface{ Unwrap() error })
+		// Both are thrown by a traditional (non-flat) file system, either
+		// if the path is a directory (cannot contain any stream at rest)
+		// or if part of a directory-to-be-created already is a file.
+		switch e := gcerr.Unwrap().(type) {
+		case *os.LinkError, *os.PathError:
+			return http.StatusConflict, e
+		default:
+			return http.StatusInternalServerError, errors.Wrap(err, "COPY failed")
+		}
+	}
+	if !deleteSource {
 		return http.StatusCreated, nil // 201, but if something gets overwritten 204
 	}
-	if strings.HasSuffix(err.Error(), "directory not empty") {
-		return http.StatusConflict, nil
+	if err := h.Bucket.Delete(ctx, srcKey); err != nil {
+		return http.StatusInternalServerError, errors.Wrap(err, "MOVE failed")
 	}
-	return http.StatusInternalServerError, errors.Wrap(err, "MOVE failed")
+	return http.StatusCreated, nil // 201, but if something gets overwritten 204
 }
 
 // deleteOneFile deletes from disk like "rm -r" and is used with HTTP DELETE.
 // The term 'file' includes directories.
 //
 // Returns 204 (StatusNoContent) if the file did not exist ex ante.
-func (h *Handler) deleteOneFile(fileName string) (int, error) {
-	path, fname, err := h.translateForFilesystem(fileName)
-	if err != nil {
+func (h *Handler) deleteOneFile(ctx context.Context, path string) (int, error) {
+	key, err := h.translateToKey(path)
+	if err != nil && err != os.ErrPermission {
 		return http.StatusUnprocessableEntity, err // 422: unprocessable entity
 	}
-	deleteThis := filepath.Join(path, fname)
-
-	// no "os.Stat(); os.IsExist()" here: we don't check for 412 (Precondition Failed)
-
-	if deleteThis == h.WriteToPath {
-		return http.StatusForbidden, nil // refuse to delete the scope's target directory
+	if key == "" || key == "/" {
+		return http.StatusForbidden, errors.Wrap(err, "DELETE has tried removing the parent directory")
 	}
 
-	err = os.RemoveAll(deleteThis)
+	err = h.Bucket.Delete(ctx, key)
 	switch err {
 	case nil:
 		return http.StatusNoContent, nil // 204
@@ -289,115 +319,46 @@ func (h *Handler) deleteOneFile(fileName string) (int, error) {
 }
 
 // writeOneHTTPBlob handles HTTP PUT (and HTTP POST without envelopes),
-// writes one file to disk by adapting writeFileFromReader to HTTP conventions.
+// writes one file to disk.
 //
 // Returns |bytesWritten|, |locationOnDisk|, |suggestHTTPResponseCode|, error.
-func (h *Handler) writeOneHTTPBlob(fileName string,
+func (h *Handler) writeOneHTTPBlob(ctx context.Context, path string,
 	expectBytes, writeQuota int64, r io.Reader) (int64, string, int, error) {
-	path, fname, err := h.translateForFilesystem(fileName)
+	locationOnDisk, err := h.translateToKey(path)
 	if err != nil {
 		return 0, "", http.StatusUnprocessableEntity, err // 422: unprocessable entity
 	}
+	locationOnDisk = h.applyRandomizedSuffix(locationOnDisk)
 
-	if h.RandomizedSuffixLength > 0 {
-		extension := filepath.Ext(fname)
-		basename := strings.TrimSuffix(fname, extension)
-		if basename == "" {
-			fname = printableSuffix(h.RandomizedSuffixLength) + extension
-		} else {
-			fname = basename + "_" + printableSuffix(h.RandomizedSuffixLength) + extension
-		}
+	ctx, cancelWrite := context.WithCancel(ctx)
+	blob, err := h.Bucket.NewWriter(ctx, locationOnDisk, nil)
+	defer cancelWrite()
+	if err != nil {
+		return 0, locationOnDisk, http.StatusInternalServerError, err
 	}
-
-	bytesWritten, err := writeFileFromReader(path, fname, r, expectBytes, writeQuota)
-	locationOnDisk := filepath.Join(path, fname)
+	bytesWritten, err := io.Copy(blob, r)
 	if err != nil && err != io.EOF {
-		if os.IsExist(err) || // gets thrown on a double race condition when using O_TMPFILE and linkat
-			strings.HasSuffix(err.Error(), "not a directory") {
-			return 0, locationOnDisk, http.StatusConflict, errFileNameConflict // 409
-		}
+		cancelWrite() // Discards the file.
+		blob.Close()
 		if bytesWritten > 0 && bytesWritten < expectBytes {
 			return bytesWritten, locationOnDisk, http.StatusInsufficientStorage, err // 507: insufficient storage
 		}
 		return bytesWritten, locationOnDisk, http.StatusInternalServerError, err
 	}
-	if bytesWritten < expectBytes {
-		// We don't return 422 on incomplete uploads, because it could be a sparse file.
-		// Its contents are kept in any case, therefore returning an error would be inappropriate.
-		return bytesWritten, locationOnDisk, http.StatusAccepted, nil // 202: accepted (but not completed)
+	if expectBytes > 0 && bytesWritten != expectBytes {
+		cancelWrite()
+		blob.Close()
+		return bytesWritten, locationOnDisk, http.StatusUnprocessableEntity, nil
+	}
+
+	if err := blob.Close(); err != nil {
+		gcerr, _ := err.(interface{ Unwrap() error })
+		switch e := gcerr.Unwrap().(type) {
+		case *os.LinkError, *os.PathError:
+			return bytesWritten, locationOnDisk, http.StatusConflict, e
+		default:
+			return bytesWritten, locationOnDisk, http.StatusInternalServerError, err
+		}
 	}
 	return bytesWritten, locationOnDisk, http.StatusCreated, nil // 201: Created
-}
-
-// writeFileFromReader implements an unit of work consisting of
-// • creation of a temporary file,
-// • writing to it,
-// • discarding it on failure ('zap') or
-// • its "emergence" ('persist') into observable namespace.
-//
-// If the bytes to be written exceed |writeQuota| then the
-// partially or completely written file is discarded.
-func writeFileFromReader(path, filename string, r io.Reader, anticipatedSize, writeQuota int64) (int64, error) {
-	err := os.MkdirAll(path, os.FileMode(0755))
-	if err != nil {
-		return 0, err
-	}
-	w, err := protofile.CreateTemp(path) // Wraps ioutil.TempFile on Windows.
-	if protofile.IsTempfileNotSupported(err) {
-		w, err = ioutil.TempFile(path, ".*")
-		defer os.Remove(w.Name())
-	}
-	if err != nil {
-		return 0, err
-	}
-	if runtime.GOOS == "windows" {
-		defer os.Remove(w.Name())
-	}
-	defer w.Close()
-
-	if anticipatedSize > 4096 {
-		w.Truncate(anticipatedSize)
-	}
-
-	var bytesWritten int64
-	if writeQuota > 0 {
-		bytesWritten, err = io.CopyN(w, r, 1+int64(writeQuota-bytesWritten))
-	} else {
-		bytesWritten, err = io.Copy(w, r)
-	}
-
-	if err != nil && err != io.EOF {
-		return bytesWritten, err
-	}
-	if writeQuota > 0 && bytesWritten > writeQuota {
-		return bytesWritten, errFileTooLarge
-	}
-
-	finalName := filepath.Join(path, filename)
-	if runtime.GOOS == "windows" {
-		err = w.Close()
-		if err != nil {
-			return bytesWritten, err
-		}
-		err = os.Rename(w.Name(), finalName)
-		if os.IsExist(err) {
-			if finfo, _ := os.Stat(finalName); !finfo.IsDir() {
-				os.Remove(finalName)
-				err = os.Rename(w.Name(), finalName)
-			}
-		}
-		return bytesWritten, err
-	}
-	err = protofile.Hardlink(w, finalName)
-	if os.IsExist(err) {
-		if finfo, _ := os.Stat(finalName); !finfo.IsDir() {
-			os.Remove(finalName)
-			err = protofile.Hardlink(w, finalName)
-		}
-	}
-	if err != nil {
-		w.Close()
-		return bytesWritten, err
-	}
-	return bytesWritten, w.Close()
 }

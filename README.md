@@ -11,7 +11,7 @@ Highlights
 ----------
 
  * uses HTTP PUT and POST for uploads
- * supports HTTP MOVE and DELETE
+ * supports HTTP COPY, MOVE, and DELETE
  * imposes limits on filenames:
    * rejects those that are not conforming to Unicode NFC or NFD
    * rejects any comprised of unexpected alphabets ϟ(ツ)╯
