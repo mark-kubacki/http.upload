@@ -7,6 +7,7 @@ import (
 	"context"
 	"net/http"
 	"path/filepath"
+	"strings"
 	"unicode"
 
 	"gocloud.dev/blob"
@@ -52,10 +53,14 @@ type Handler struct {
 //
 // 'next' is optional and can be nil.
 func NewHandler(scope string, targetDirectory string, next http.Handler) (*Handler, error) {
-	targetDirectory = filepath.Clean(targetDirectory) // Gets rid of any trailing slash.
+	if !strings.Contains(targetDirectory, "://") {
+		targetDirectory = "file://" +
+			filepath.Clean(targetDirectory) +
+			"?metadata=skip"
+	}
 	bucket, err := blob.OpenBucket(
 		context.Background(),
-		"file://"+targetDirectory,
+		targetDirectory,
 	)
 	if err != nil {
 		return nil, err

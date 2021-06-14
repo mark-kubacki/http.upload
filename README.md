@@ -60,7 +60,27 @@ These settings are required:
    It will be stripped and won't be part of any resulting file and directories.
  * **to** is an existing target directory. Must be a quoted absolute path.
    When using Linux it is recommended to place this on a filesystem which supports
-   **O_TMPFILE**, such as (but not limited to) *ext4* or *XFS*.
+   **O_TMPFILE** and **extents**, such as (but not limited to) *ext4* or *XFS*.  
+   Absent any other silently assumes scheme `file://`.
+
+It is not advised—signed upload URLs are more efficient—
+you can upload directly to cloud storage buckets.
+Use a scheme supported by the [Go CDK](https://gocloud.dev/howto/blob/):
+
+```go
+import (
+  upload "blitznote.com/src/http.upload/v5"
+  _ "gocloud.dev/blob/gcsblob" // Registers scheme "gs://"
+  _ "gocloud.dev/blob/s3blob"  // Registers scheme "s3://"
+)
+
+// …
+
+to := "s3://my-bucket?region=us-west-1"
+to = "gs://my-bucket"
+to = "/var/tmp"
+h, _ := upload.NewHandler("/", to, nil)
+```
 
 These are optional:
 
@@ -107,11 +127,9 @@ Tutorial
 Setup a minimal configuration like this, or `go run example.go &` after copying it into a separate
 directory and removing the line with `+build ignore` (mind the port number, which is `9000` there):
 
-```
-upload /web/path {
- 	to "/var/tmp"
- 	enable_webdav
-}
+```go
+uploadHandler, _ := upload.NewHandler("/web/path", "/var/tmp", nil)
+uploadHandler.EnableWebdav = true
 ```
 
 … and upload one file:
@@ -152,36 +170,61 @@ Configuration Examples
 A host used by someone in Central and West Europe would be configured like this
 to accept filenames in Latin with some Greek runes and a few mathematical symbols:
 
-```
-upload /college/curriculum {
-	to "/home/ellen_baker/inbox"
-	filenames_form NFC
-	filenames_in u0000–u007F u0100–u017F u0391–u03C9 u2018–u203D u2152–u217F
-}
+```go
+h, _ := upload.NewHandler(
+  "/college/curriculum",
+  "/home/ellen_baker/inbox",
+  nil)
+h.UnicodeForm = &struct{ Use norm.Form }{Use: norm.NFC}
+h.RestrictFilenamesTo = upload.ParseUnicodeBlockList(
+  "u0000–u007F u0100–u017F u0391–u03C9 u2018–u203D u2152–u217F",
+)
+
+// upload /college/curriculum {
+//	to "/home/ellen_baker/inbox"
+//	filenames_form NFC
+//	filenames_in u0000–u007F u0100–u017F u0391–u03C9 u2018–u203D u2152–u217F
+// }
 ```
 
 A host for Linux distribution packages can be more restrictive:
 
-```
-upload /binhost/gentoo {
-	to "/var/portage/packages"
-	filenames_in u0000–u007F
-}
-tls {
-	…
-	clientcas /etc/ssl/dist-uploaders-CA.crt
-}
+```go
+h, _ := upload.NewHandler(
+  "/binhost/gentoo",
+  "/var/portage/packages",
+  nil)
+h.RestrictFilenamesTo = upload.ParseUnicodeBlockList(
+  "u0000–u007F", // ASCII
+)
+
+// upload /binhost/gentoo {
+//	to "/var/portage/packages"
+//	filenames_in u0000–u007F
+// }
 ```
 
 … while someone in East Asia would share space on his blog like this:
 
-```
-upload /wp-uploads {
-	to "/var/www/senpai/wp-uploads"
-	enable_webdav
-	max_filesize 16777216
-	filenames_in u0000–u007F u0100–u017F u0391–u03C9 u2018–u203D u3000–u303f u3040–u309f u30a0–u30ff u4e00–9faf uff00–uffef
+```go
+to, _ := blob.OpenBucket(context.Background(), "gs://blog.senpai.asia")
+alphabet, _ := upload.ParseUnicodeBlockList(
+  "u0000–u007F u0100–u017F u0391–u03C9 u2018–u203D u3000–u303f u3040–u309f u30a0–u30ff u4e00–9faf uff00–uffef"
+)
+h, _ := upload.Handler{
+  Scope:               "/wp-uploads",
+  Bucket:              to,
+  EnableWebdav:        true,
+  MaxFilesize:         16<<20,
+  RestrictFilenamesTo: alphabet,
 }
+
+// upload /wp-uploads {
+//	to "/var/www/senpai/wp-uploads"
+//	enable_webdav
+//	max_filesize 16777216
+//	filenames_in u0000–u007F u0100–u017F u0391–u03C9 u2018–u203D u3000–u303f u3040–u309f u30a0–u30ff u4e00–9faf uff00–uffef
+// }
 ```
 
 See Also
