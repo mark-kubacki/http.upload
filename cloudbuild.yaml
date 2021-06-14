@@ -95,6 +95,7 @@ steps:
       -e 's@"/"@"/web/path"@;s@:9000@:8000@' \
       -e '/http.Handle/a\\thttp.Handle(scope+"/", uploadHandler)' \
     >$$D/example.go;
+    cp go.sum $$D/
     cd $$D/;
     printf 'module main\nrequire blitznote.com/src/http.upload/v5 v5.0.0\nreplace blitznote.com/src/http.upload/v5 => /workspace\n' >go.mod;
 
